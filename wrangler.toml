@@ -9,7 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "trend-catcher-db"
-database_id = "local-dev"
+database_id = "7a46a8d3-0b26-4d48-bbd2-f7f3d87de58b"
 
 # Scrape task queue
 [[queues.producers]]
@@ -21,18 +21,21 @@ queue = "scrape-queue"
 max_batch_size = 10
 max_batch_timeout = 5
 max_retries = 3
-dead_letter_queue = "scrape-queue-dlq"
 
 # Daily cron at UTC 1:00 AM
 [triggers]
 crons = ["0 1 * * *"]
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [assets]
 directory = "./public"
 
 [vars]
-NOTIFICATION_EMAIL = ""
-INTERNAL_SECRET = ""
+NOTIFICATION_EMAIL = "chenjunqian0810@gmail.com"
+INTERNAL_SECRET = "3fc072cbcb7e55bb4e1a977f5dc8a96e"
 
 # Secrets (set via `npx wrangler secret put`):
 #   DEEPSEEK_API_KEY — DeepSeek API key

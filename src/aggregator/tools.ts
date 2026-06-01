@@ -22,6 +22,8 @@ export function createAgentTools(db: D1Database, date: string) {
         .describe("Website identifier"),
     }),
     execute: async ({ website }) => {
+      console.log(`[tool] getRawDataByWebsite: ${website}`);
+
       const result = await getCompletedTasksByDateAndWebsite(db, date, website);
 
       if (!result.results || result.results.length === 0) {
@@ -54,7 +56,7 @@ export function createAgentTools(db: D1Database, date: string) {
 
   const saveSiteSummary = tool({
     description:
-      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 100-200 characters.",
+      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 100-200 characters. Include Markdown links [Name](URL) for specific products or articles mentioned.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
@@ -67,7 +69,10 @@ export function createAgentTools(db: D1Database, date: string) {
         .describe("Chinese summary of today's trends for this website (100-200 chars)"),
     }),
     execute: async ({ website, summaryEn, summaryZh }) => {
+      console.log(`[tool] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
+
       const existing = await getSummaryByDate(db, date);
+
       let siteSummaries: Record<string, SiteSummaryEntry> = {};
 
       if (existing?.site_summaries) {
@@ -78,7 +83,11 @@ export function createAgentTools(db: D1Database, date: string) {
         }
       }
 
+      const before = Object.keys(siteSummaries);
       siteSummaries[website] = { en: summaryEn, zh: summaryZh };
+      const after = Object.keys(siteSummaries);
+
+      console.log(`[tool] saveSiteSummary: sites before=${before.join(",") || "none"} after=${after.join(",")}`);
 
       await upsertDailySummary(db, {
         summary_date: date,
@@ -95,7 +104,7 @@ export function createAgentTools(db: D1Database, date: string) {
 
   const saveFinalReport = tool({
     description:
-      "Save the final overall daily trend report. You MUST provide the report in BOTH English (reportEn) and Chinese (reportZh), each 300-500 characters in Markdown format.",
+      "Save the final overall daily trend report. You MUST provide the report in BOTH English (reportEn) and Chinese (reportZh), each 300-500 characters in Markdown format. Use Markdown links [Name](URL) for specific products, repos, and articles mentioned.",
     parameters: z.object({
       reportEn: z
         .string()
@@ -110,6 +119,12 @@ export function createAgentTools(db: D1Database, date: string) {
     }),
     execute: async ({ reportEn, reportZh }) => {
       const existing = await getSummaryByDate(db, date);
+
+      const siteSummaryKeys = existing?.site_summaries
+        ? (() => { try { return Object.keys(JSON.parse(existing.site_summaries)); } catch { return []; } })()
+        : [];
+
+      console.log(`[tool] saveFinalReport: sites in DB at save time = ${siteSummaryKeys.join(",") || "none"} (en=${reportEn.length}c, zh=${reportZh.length}c)`);
 
       await upsertDailySummary(db, {
         summary_date: date,

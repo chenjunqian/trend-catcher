@@ -3,6 +3,11 @@ import type { DailySummary } from "../db/client";
 import type { Lang } from "../i18n";
 import { t } from "../i18n";
 import Layout from "./layout";
+import { stripMarkdownPreview } from "./markdown";
+
+const ContentHtml: FC<{ html: string }> = ({ html }) => (
+  <span dangerouslySetInnerHTML={{ __html: html }} />
+);
 
 interface HomeProps {
   summaries: Pick<
@@ -45,8 +50,7 @@ const Home: FC<HomeProps> = ({ summaries, lang }) => {
                 </div>
                 <p>
                   {report
-                    ? report.slice(0, 200) +
-                      (report.length > 200 ? "..." : "")
+                    ? <ContentHtml html={stripMarkdownPreview(report)} />
                     : "..."}
                 </p>
               </div>

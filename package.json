@@ -9,8 +9,8 @@
     "db:create": "wrangler d1 create trend-catcher-db",
     "db:migrate": "wrangler d1 execute trend-catcher-db --file=./src/db/schema.sql",
     "db:migrate:local": "wrangler d1 execute trend-catcher-db --local --file=./src/db/schema.sql",
-    "db:seed": "wrangler d1 execute trend-catcher-db --local --command=\"",
     "test:scrapers": "npx tsx scripts/test-scrapers.ts",
+    "it-test": "npx tsx scripts/it-test.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -25,7 +25,8 @@
     "@cloudflare/vitest-pool-workers": "^0.16.11",
     "@cloudflare/workers-types": "^4.20250505.0",
     "typescript": "^5.7.3",
+    "undici": "^8.3.0",
     "vitest": "^4.1.8",
-    "wrangler": "^3.109.1"
+    "wrangler": "^4.96.0"
   }
 }

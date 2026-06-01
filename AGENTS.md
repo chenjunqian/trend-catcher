@@ -64,8 +64,8 @@ trend-catcher/
 │   └── android-chrome-512x512.png
 ├── scripts/
 │   ├── test-scrapers.ts       # Manual scraper test runner
-│   ├── seed.sql               # Sample D1 data for local dev
-│   └── seed-extra.sql
+│   ├── it-test.ts             # Full integration test (scrape → D1 → LLM → email)
+│   └── proxy.ts               # Auto-detect https_proxy for local dev
 ├── src/
 │   ├── index.tsx              # Hono app entry (routes, queue, cron, PWA)
 │   ├── db/

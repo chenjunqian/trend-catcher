@@ -20,7 +20,22 @@ import { generateText } from "ai";
 import { runAggregation } from "./aggregate";
 
 function mockD1() {
-  return {} as unknown as D1Database;
+  const stmt = {
+    bind: vi.fn().mockReturnThis(),
+    first: vi.fn().mockResolvedValue({
+      site_summaries: JSON.stringify({
+        producthunt: { en: "PH EN", zh: "PH ZH" },
+        hackernews: { en: "HN EN", zh: "HN ZH" },
+        github: { en: "GH EN", zh: "GH ZH" },
+      }),
+      full_report_en: "report en",
+      full_report_zh: "report zh",
+    }),
+  };
+  stmt.bind.mockImplementation(() => stmt);
+  return {
+    prepare: vi.fn().mockReturnValue(stmt),
+  } as unknown as D1Database;
 }
 
 describe("runAggregation", () => {

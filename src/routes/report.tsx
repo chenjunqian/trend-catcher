@@ -4,6 +4,7 @@ import type { Lang } from "../i18n";
 import { t, switchLang } from "../i18n";
 import type { SiteSummaryEntry } from "../aggregator/tools";
 import Layout from "./layout";
+import { renderMarkdown } from "./markdown";
 
 interface ReportProps {
   summary: DailySummary;
@@ -51,7 +52,7 @@ const Report: FC<ReportProps> = ({ summary, lang }) => {
                   {website}
                 </span>
               </h3>
-              <p>{lang === "zh" ? entry.zh : entry.en}</p>
+              <ReportContent html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)} />
             </div>
           ))}
         </div>
@@ -83,22 +84,6 @@ const Report: FC<ReportProps> = ({ summary, lang }) => {
     </Layout>
   );
 };
-
-function renderMarkdown(md: string): string {
-  return md
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\n- /g, "\n<li>")
-    .replace(/(<li>.*?)\n/g, "$1</li>\n")
-    .replace(/((?:<li>.*?<\/li>\n?)+)/g, "<ul>$1</ul>")
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/^(?!<[a-z/])(.+)$/gm, "<p>$1</p>")
-    .replace(/<\/ul><p><\/p><ul>/g, "</ul><ul>")
-    .replace(/<\/ul>\s*<p>\s*<\/p>\s*<ul>/g, "</ul><ul>")
-    .replace(/<p><\/p>/g, "");
-}
 
 const ReportContent: FC<{ html: string }> = ({ html }) => (
   <div dangerouslySetInnerHTML={{ __html: html }} />
