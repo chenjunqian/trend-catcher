@@ -1,0 +1,42 @@
+name = "trend-catcher"
+main = "src/index.tsx"
+compatibility_date = "2025-05-05"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database — create first:
+#   npx wrangler d1 create trend-catcher-db
+# Copy the returned database_id here
+[[d1_databases]]
+binding = "DB"
+database_name = "trend-catcher-db"
+database_id = "local-dev"
+
+# Scrape task queue
+[[queues.producers]]
+queue = "scrape-queue"
+binding = "SCRAPE_QUEUE"
+
+[[queues.consumers]]
+queue = "scrape-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "scrape-queue-dlq"
+
+# Daily cron at UTC 1:00 AM
+[triggers]
+crons = ["0 1 * * *"]
+
+[assets]
+directory = "./public"
+
+[vars]
+NOTIFICATION_EMAIL = ""
+INTERNAL_SECRET = ""
+
+# Secrets (set via `npx wrangler secret put`):
+#   DEEPSEEK_API_KEY — DeepSeek API key
+#   RESEND_API_KEY   — Resend API key for email
+
+[env.production]
+vars = { NOTIFICATION_EMAIL = "", INTERNAL_SECRET = "" }
