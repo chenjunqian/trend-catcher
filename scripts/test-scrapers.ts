@@ -1,3 +1,4 @@
+import "./proxy";
 import { fetchProductHuntTop10 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";

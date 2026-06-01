@@ -14,6 +14,9 @@ export interface GitHubTrendingItem {
 }
 
 export async function fetchGitHubTrending(): Promise<GitHubTrendingItem[]> {
+  console.log("[github] Fetching trending page...");
+  const startMs = Date.now();
+
   const html = await fetchHtml("https://github.com/trending");
   const $ = cheerio.load(html);
   const items: GitHubTrendingItem[] = [];
@@ -64,5 +67,7 @@ export async function fetchGitHubTrending(): Promise<GitHubTrendingItem[]> {
     });
   });
 
+  const elapsed = Date.now() - startMs;
+  console.log(`[github] ✅ ${items.length} repos (${elapsed}ms)`);
   return items.slice(0, 25);
 }
