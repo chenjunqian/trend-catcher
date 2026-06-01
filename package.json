@@ -10,7 +10,9 @@
     "db:migrate": "wrangler d1 execute trend-catcher-db --file=./src/db/schema.sql",
     "db:migrate:local": "wrangler d1 execute trend-catcher-db --local --file=./src/db/schema.sql",
     "db:seed": "wrangler d1 execute trend-catcher-db --local --command=\"",
-    "test:scrapers": "npx tsx scripts/test-scrapers.ts"
+    "test:scrapers": "npx tsx scripts/test-scrapers.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.1.13",
@@ -20,8 +22,10 @@
     "resend": "^4.1.2"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.11",
     "@cloudflare/workers-types": "^4.20250505.0",
     "typescript": "^5.7.3",
+    "vitest": "^4.1.8",
     "wrangler": "^3.109.1"
   }
 }
