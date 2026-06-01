@@ -1,0 +1,27 @@
+{
+  "name": "trend-catcher",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create trend-catcher-db",
+    "db:migrate": "wrangler d1 execute trend-catcher-db --file=./src/db/schema.sql",
+    "db:migrate:local": "wrangler d1 execute trend-catcher-db --local --file=./src/db/schema.sql",
+    "db:seed": "wrangler d1 execute trend-catcher-db --local --command=\"",
+    "test:scrapers": "npx tsx scripts/test-scrapers.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^1.1.13",
+    "ai": "^4.1.37",
+    "cheerio": "^1.0.0",
+    "hono": "^4.6.16",
+    "resend": "^4.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250505.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^3.109.1"
+  }
+}

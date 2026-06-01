@@ -1,0 +1,11 @@
+# DeepSeek API Key (OpenAI-compatible) — required for LLM aggregation
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+
+# Resend API Key — required for email notifications
+RESEND_API_KEY=re-your-resend-api-key
+
+# Email address to receive daily trend reports
+NOTIFICATION_EMAIL=you@example.com
+
+# Secret token for internal /internal/aggregate endpoint auth
+INTERNAL_SECRET=change-me-to-a-random-string
