@@ -9,6 +9,7 @@ import { renderMarkdown } from "./markdown";
 interface ReportProps {
   summary: DailySummary;
   lang: Lang;
+  path: string;
 }
 
 function parseSiteSummaries(raw: string): Record<string, SiteSummaryEntry> {
@@ -25,12 +26,12 @@ const SITE_LABELS: Record<string, string> = {
   github: "GitHub Trending",
 };
 
-const Report: FC<ReportProps> = ({ summary, lang }) => {
+const Report: FC<ReportProps> = ({ summary, lang, path }) => {
   const siteSummaries = parseSiteSummaries(summary.site_summaries);
   const altLang = switchLang(lang);
 
   return (
-    <Layout title={`${summary.summary_date}`} lang={lang}>
+    <Layout title={`${summary.summary_date}`} lang={lang} path={path}>
       <a href={`/?lang=${lang}`} class="back-link">
         {t(lang, "report.back")}
       </a>
@@ -59,27 +60,31 @@ const Report: FC<ReportProps> = ({ summary, lang }) => {
       )}
 
       <div class="report">
-        <div class="lang-section">
-          <h2>
-            {t(lang, "report.overall")} (English)
-          </h2>
-          {summary.full_report_en ? (
-            <ReportContent html={renderMarkdown(summary.full_report_en)} />
-          ) : (
-            <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
-          )}
-        </div>
+        {lang === "en" && (
+          <div class="lang-section">
+            <h2>
+              {t(lang, "report.overall")} (English)
+            </h2>
+            {summary.full_report_en ? (
+              <ReportContent html={renderMarkdown(summary.full_report_en)} />
+            ) : (
+              <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
+            )}
+          </div>
+        )}
 
-        <div class="lang-section">
-          <h2>
-            {t(lang, "report.overall")} (中文)
-          </h2>
-          {summary.full_report_zh ? (
-            <ReportContent html={renderMarkdown(summary.full_report_zh)} />
-          ) : (
-            <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
-          )}
-        </div>
+        {lang === "zh" && (
+          <div class="lang-section">
+            <h2>
+              {t(lang, "report.overall")} (中文)
+            </h2>
+            {summary.full_report_zh ? (
+              <ReportContent html={renderMarkdown(summary.full_report_zh)} />
+            ) : (
+              <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
+            )}
+          </div>
+        )}
       </div>
     </Layout>
   );

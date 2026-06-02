@@ -16,7 +16,6 @@ import { getTodayDateString } from "./utils/date";
 import { detectLang } from "./i18n";
 import type { TaskMessage } from "./tasks/generator";
 import { manifest } from "./pwa/manifest";
-import { swCode } from "./pwa/sw";
 
 type Bindings = {
   DB: D1Database;
@@ -35,7 +34,7 @@ app.get("/", async (c) => {
   const result = await getRecentSummaries(DB, 30);
 
   return c.html(
-    <Home summaries={result.results ?? []} lang={lang} />
+    <Home summaries={result.results ?? []} lang={lang} path={c.req.path} />
   );
 });
 
@@ -49,7 +48,7 @@ app.get("/reports/:date", async (c) => {
     return c.notFound();
   }
 
-  return c.html(<Report summary={summary} lang={lang} />);
+  return c.html(<Report summary={summary} lang={lang} path={c.req.path} />);
 });
 
 // Internal endpoint: manually trigger aggregation + email
@@ -87,13 +86,6 @@ app.post("/internal/aggregate", async (c) => {
 // PWA routes
 app.get("/manifest.json", (c) => {
   return c.json(manifest);
-});
-
-app.get("/sw.js", (c) => {
-  return c.text(swCode, 200, {
-    "Content-Type": "application/javascript",
-    "Service-Worker-Allowed": "/",
-  });
 });
 
 app.get("/offline", (c) => {

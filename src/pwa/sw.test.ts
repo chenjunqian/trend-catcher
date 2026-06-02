@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { swCode } from "./sw";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const swCode = readFileSync(resolve(__dirname, "../../public/sw.js"), "utf-8");
 
 describe("service worker", () => {
   it("contains a valid cache name", () => {

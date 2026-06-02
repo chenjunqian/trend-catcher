@@ -2,9 +2,10 @@ import type { FC } from "hono/jsx";
 import type { Lang } from "../i18n";
 import { t, switchLang } from "../i18n";
 
-const Layout: FC<{ title: string; lang: Lang; children?: any }> = ({
+const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = ({
   title,
   lang,
+  path,
   children,
 }) => {
   const altLang = switchLang(lang);
@@ -28,6 +29,7 @@ const Layout: FC<{ title: string; lang: Lang; children?: any }> = ({
         </title>
         <style>{`
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+          html { overscroll-behavior: contain; }
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000; color: #fff; line-height: 1.6; }
           a { color: #fff; text-decoration: none; }
           a:hover { text-decoration: underline; }
@@ -53,16 +55,12 @@ const Layout: FC<{ title: string; lang: Lang; children?: any }> = ({
           .empty { text-align: center; padding: 60px 20px; color: #888; }
           .lang-section { margin-top: 24px; }
           .lang-section h2 { margin: 16px 0 12px; }
+          .pull-indicator { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-end; height: 0; overflow: hidden; background: #000; transition: height .15s ease-out; }
+          .pull-indicator .spinner { width: 20px; height: 20px; border: 2px solid #222; border-top-color: #fff; border-radius: 50%; animation: ptr-spin .6s linear infinite; margin-bottom: 10px; }
+          @keyframes ptr-spin { to { transform: rotate(360deg); } }
         `}</style>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-if ("serviceWorker" in navigator && !location.hostname.includes("localhost")) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
-`,
-          }}
-        />
+        <script src="/register-sw.js" />
+        <script src="/pull-to-refresh.js" />
       </head>
       <body>
         <header>
@@ -72,7 +70,7 @@ if ("serviceWorker" in navigator && !location.hostname.includes("localhost")) {
             </a>
           </h1>
           <nav>
-            <a href={`/?lang=${altLang}`} class="lang-switch">
+            <a href={`${path}?lang=${altLang}`} class="lang-switch">
               {t(lang, "lang.switch")}
             </a>
           </nav>

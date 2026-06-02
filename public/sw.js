@@ -1,4 +1,3 @@
-export const swCode = `// Trend Catcher Service Worker
 const CACHE = "trend-catcher-v2";
 const OFFLINE_URL = "/offline";
 
@@ -30,8 +29,23 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request)
+    (async () => {
+      if (event.request.mode === "navigate") {
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse.ok) {
+            const cache = await caches.open(CACHE);
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch {
+          const cached = await caches.match(event.request);
+          return cached || caches.match(OFFLINE_URL);
+        }
+      }
+
+      const cached = await caches.match(event.request);
+      fetch(event.request)
         .then((response) => {
           if (response.ok) {
             const clone = response.clone();
@@ -39,12 +53,10 @@ self.addEventListener("fetch", (event) => {
               cache.put(event.request, clone);
             });
           }
-          return response;
         })
-        .catch(() => cached || caches.match(OFFLINE_URL));
+        .catch(() => {});
 
-      return cached || fetched;
-    })
+      return cached || fetch(event.request).catch(() => caches.match(OFFLINE_URL));
+    })()
   );
 });
-`;

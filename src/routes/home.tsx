@@ -15,11 +15,12 @@ interface HomeProps {
     "summary_date" | "full_report_en" | "full_report_zh"
   >[];
   lang: Lang;
+  path: string;
 }
 
-const Home: FC<HomeProps> = ({ summaries, lang }) => {
+const Home: FC<HomeProps> = ({ summaries, lang, path }) => {
   return (
-    <Layout title={t(lang, "site.subtitle")} lang={lang}>
+    <Layout title={t(lang, "site.subtitle")} lang={lang} path={path}>
       <h2 style={{ fontSize: "22px", marginBottom: "24px" }}>
         {t(lang, "home.heading")}
       </h2>
