@@ -7,7 +7,7 @@ import {
   updateTaskStatus,
   getPendingTaskCountForDate,
 } from "../db/client";
-import { fetchProductHuntTop10 } from "./processors/producthunt";
+import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
 import { runAggregation } from "../aggregator/aggregate";
@@ -38,7 +38,7 @@ async function processTask(
 
     switch (message.website) {
       case "producthunt":
-        rawData = await fetchProductHuntTop10();
+        rawData = await fetchProductHuntTop20();
         break;
       case "hackernews":
         rawData = await fetchHackerNewsTop30();

@@ -10,7 +10,7 @@ export interface ProductHuntItem {
   published: string;
 }
 
-export async function fetchProductHuntTop10(): Promise<ProductHuntItem[]> {
+export async function fetchProductHuntTop20(): Promise<ProductHuntItem[]> {
   const xml = await fetchHtml("https://www.producthunt.com/feed");
   const items: ProductHuntItem[] = [];
 
@@ -43,7 +43,7 @@ export async function fetchProductHuntTop10(): Promise<ProductHuntItem[]> {
     });
   }
 
-  return items.slice(0, 10);
+  return items.slice(0, 20);
 }
 
 function extractTag(xml: string, tag: string): string {

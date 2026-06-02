@@ -3,7 +3,7 @@ import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import "./proxy";
-import { fetchProductHuntTop10 } from "../src/tasks/processors/producthunt";
+import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
 import { getTodayDateString } from "../src/utils/date";
@@ -52,7 +52,7 @@ async function main() {
 
   try {
     console.log("  [PH]  Product Hunt...");
-    ph = await fetchProductHuntTop10();
+    ph = await fetchProductHuntTop20();
     console.log(`  [PH]  ✅ ${(ph as unknown[]).length} items`);
   } catch (err) {
     console.log(`  [PH]  ❌ ${(err as Error).message}`);

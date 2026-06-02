@@ -13,28 +13,30 @@ const SYSTEM_PROMPT = `You are a professional product trend analyst specializing
 Your tools and workflow:
 1. Use getRawDataByWebsite to retrieve raw data from ALL three websites: producthunt, hackernews, github. You MUST call it 3 times.
 
-2. Analyze the data for each website and identify the 3 most noteworthy products or topics. When mentioning specific products, articles, or repos, ALWAYS use Markdown link format [Name](URL) using the URL/links from the raw data.
+2. Review the raw data from each website. For the most promising/interesting products and topics, use webSearch to research them deeply — look for product details, launch context, market positioning, competitor landscape, community reception, and business model. Use at least 3-5 webSearch calls per website to gather rich context.
 
-3. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 100-200 characters. Include Markdown links for specific items mentioned.
+3. Analyze the data for each website and identify up to 10 noteworthy products or topics per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], etc. When mentioning products, ALWAYS use Markdown link format [Name](URL) using the URL/links from the raw data. Incorporate insights from webSearch into each item's description.
 
-4. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 300-500 characters in Markdown format. The report should synthesize insights across all websites.
+4. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links.
+
+5. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. This should be a ~15-minute read for indie developers. Structure the report with sections: (a) Cross-Website Trend Synthesis — what themes appear across sites, (b) Product Deep Dives — commentary and analysis on 3-5 standout products with webSearch insights, (c) Market Implications — what these trends mean for indie developers, (d) Actionable Opportunities — specific ideas and advice for builders.
 
 Report requirements:
 - Summaries and reports must be generated in BOTH English AND Chinese
 - Target indie developers, focusing on actionable opportunities and trends
-- Each site summary MUST highlight 3 specific products/topics with Markdown links to the original source
-- The overall report should identify cross-website commonalities and emerging directions
-- Use clear, professional language
+- Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
+- The overall report should identify cross-website commonalities, provide deep commentary on key products, market analysis, and concrete advice for indie developers
+- Use the webSearch tool extensively to enrich your analysis with real-world context
 
 IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
 
 const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
 
-const SUMMARY_PROMPT = `You are a trend analyst. Given the following raw trending data for a website, generate a short bilingual summary.
+const SUMMARY_PROMPT = `You are a trend analyst. Given the following raw trending data for a website, generate a bilingual summary.
 
 Requirements:
-- English summary (100-200 chars): highlight 3 most noteworthy items with reasons. Use [Name](URL) Markdown links.
-- Chinese summary (100-200 chars): same content in Chinese. Use [Name](URL) Markdown links.
+- English summary (400-600 chars): list up to 10 noteworthy items with [Category] tags (e.g. [AI], [SaaS], [DevTools], [Open Source], etc.). Include a brief reason why each is notable. Use [Name](URL) Markdown links for every item.
+- Chinese summary (400-600 chars): same content in Chinese. Use [Name](URL) Markdown links and [Category] tags.
 
 Return your response as JSON: {"en": "...", "zh": "..."}`;
 
@@ -63,7 +65,7 @@ async function fillMissingSiteSummary(
       model,
       system: SUMMARY_PROMPT,
       prompt: `Website: ${website}\n\nRaw data:\n${dataStr}`,
-      maxTokens: 500,
+      maxTokens: 1200,
     });
 
     const text = resp.text || "";
@@ -113,7 +115,7 @@ export async function runAggregation(
     prompt:
       "Please retrieve today's trending data from Product Hunt, Hacker News, and GitHub Trending. Analyze each source, save individual site summaries in both English and Chinese, then generate a comprehensive bilingual daily report for indie developers.",
     tools,
-    maxSteps: 10,
+    maxSteps: 20,
     onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
       console.log("Agent step finished", {
         text: text?.slice(0, 100),
