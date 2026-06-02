@@ -19,12 +19,12 @@ describe("manifest", () => {
     expect(manifest.display).toBe("standalone");
   });
 
-  it("has theme_color set to brand orange", () => {
-    expect(manifest.theme_color).toBe("#f78166");
+  it("has theme_color set", () => {
+    expect(manifest.theme_color).toBe("#000000");
   });
 
   it("has background_color set", () => {
-    expect(manifest.background_color).toBe("#0f1117");
+    expect(manifest.background_color).toBe("#000000");
   });
 
   it("has at least one icon", () => {

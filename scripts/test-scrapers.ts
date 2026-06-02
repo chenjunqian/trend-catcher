@@ -1,5 +1,5 @@
 import "./proxy";
-import { fetchProductHuntTop10 } from "../src/tasks/processors/producthunt";
+import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
 
@@ -33,7 +33,7 @@ async function test(name: string, fn: () => Promise<unknown>) {
 (async () => {
   console.log("Starting scraper tests...\n");
 
-  await test("Product Hunt Top 10", fetchProductHuntTop10);
+  await test("Product Hunt Top 20", fetchProductHuntTop20);
   await test("Hacker News Top 30", fetchHackerNewsTop30);
   await test("GitHub Trending", fetchGitHubTrending);
 

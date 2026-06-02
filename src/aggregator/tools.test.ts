@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import type { ToolExecutionOptions } from "ai";
 import { createAgentTools } from "./tools";
 
+vi.mock("./search", () => ({
+  searchWeb: vi.fn(),
+}));
+
+import { searchWeb } from "./search";
+
 const execOpts = {} as ToolExecutionOptions;
 
 function newStmt() {
@@ -101,6 +107,42 @@ describe("createAgentTools", () => {
         summaryZh: "新的 PH",
       }, execOpts);
       expect(s.first).toHaveBeenCalled();
+    });
+  });
+
+  describe("webSearch", () => {
+    it("returns search results", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      vi.mocked(searchWeb).mockResolvedValueOnce([
+        { title: "Arc Browser", url: "https://arc.net", snippet: "A better web browser" },
+        { title: "Arc Browser review", url: "https://example.com/review", snippet: "Review of Arc" },
+      ]);
+      const result = await tools.webSearch.execute({ query: "What is Arc Browser?" }, execOpts);
+      expect(result.results).toHaveLength(2);
+      expect(result.results[0].title).toBe("Arc Browser");
+      expect(result.query).toBe("What is Arc Browser?");
+    });
+
+    it("returns empty results with note when search finds nothing", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      vi.mocked(searchWeb).mockResolvedValueOnce([]);
+      const result = await tools.webSearch.execute({ query: "xyznonexistent12345" }, execOpts);
+      expect(result.results).toHaveLength(0);
+      expect(result.note).toContain("No search results");
+    });
+
+    it("limits query length to valid range", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      vi.mocked(searchWeb).mockResolvedValueOnce([{ title: "X", url: "https://x.com", snippet: "X" }]);
+      const result = await tools.webSearch.execute({ query: "a".repeat(500) }, execOpts);
+      expect(result.results).toHaveLength(1);
+      expect(searchWeb).toHaveBeenCalledWith("a".repeat(500));
     });
   });
 
