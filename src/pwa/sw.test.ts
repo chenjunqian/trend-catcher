@@ -3,7 +3,7 @@ import { swCode } from "./sw";
 
 describe("service worker", () => {
   it("contains a valid cache name", () => {
-    expect(swCode).toContain('const CACHE = "trend-catcher-v1"');
+    expect(swCode).toContain('const CACHE = "trend-catcher-v2"');
   });
 
   it("listens for install event", () => {

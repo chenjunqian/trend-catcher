@@ -1,5 +1,5 @@
 export const swCode = `// Trend Catcher Service Worker
-const CACHE = "trend-catcher-v1";
+const CACHE = "trend-catcher-v2";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
