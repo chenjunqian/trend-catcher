@@ -11,7 +11,6 @@ vi.mock("./llm", () => ({
 vi.mock("./tools", () => ({
   createAgentTools: vi.fn(() => ({
     getRawDataByWebsite: {},
-    webSearch: {},
     saveSiteSummary: {},
     saveFinalReport: {},
   })),
@@ -54,7 +53,7 @@ describe("runAggregation", () => {
 
     expect(callArgs.system).toBeTruthy();
     expect(callArgs.tools).toBeTruthy();
-    expect(callArgs.maxSteps).toBe(20);
+    expect(callArgs.maxSteps).toBe(10);
   });
 
   it("passes DeepSeek API key to model creation", async () => {
@@ -85,7 +84,6 @@ describe("runAggregation", () => {
     expect(callArgs.system).toContain("github");
     expect(callArgs.system).toContain("English");
     expect(callArgs.system).toContain("Chinese");
-    expect(callArgs.system).toContain("webSearch");
     expect(callArgs.system).toContain("up to 10");
     expect(callArgs.system).toContain("400-600");
     expect(callArgs.system).toContain("1500-3000");
