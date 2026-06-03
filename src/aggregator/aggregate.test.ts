@@ -17,6 +17,27 @@ vi.mock("./tools", () => ({
   })),
 }));
 
+vi.mock("@cloudflare/containers", () => ({
+  Container: class {},
+  getContainer: vi.fn(() => ({
+    start: vi.fn(),
+    startAndWaitForPorts: vi.fn(),
+    fetch: vi.fn(),
+    containerFetch: vi.fn(),
+    stop: vi.fn(),
+    destroy: vi.fn(),
+    getState: vi.fn(),
+    renewActivityTimeout: vi.fn(),
+    schedule: vi.fn(),
+    onStart: vi.fn(),
+    onStop: vi.fn(),
+    onError: vi.fn(),
+  })),
+  ContainerProxy: class {},
+  getRandom: vi.fn(),
+  switchPort: vi.fn(),
+}));
+
 import { generateText } from "ai";
 import { runAggregation } from "./aggregate";
 
