@@ -174,7 +174,6 @@ export function createAgentTools(db: D1Database, date: string) {
 
   return {
     getRawDataByWebsite,
-    webSearch,
     saveSiteSummary,
     saveFinalReport,
   };
