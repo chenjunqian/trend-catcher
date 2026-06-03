@@ -36,6 +36,19 @@ directory = "./public"
 [vars]
 NOTIFICATION_EMAIL = "chenjunqian0810@gmail.com"
 
+[[containers]]
+max_instances = 1
+class_name = "AggregatorContainer"
+image = "./Dockerfile"
+
+[[durable_objects.bindings]]
+name = "AGGREGATOR_CONTAINER"
+class_name = "AggregatorContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AggregatorContainer"]
+
 # Secrets (set via `npx wrangler secret put`):
 #   DEEPSEEK_API_KEY — DeepSeek API key
 #   RESEND_API_KEY   — Resend API key for email
