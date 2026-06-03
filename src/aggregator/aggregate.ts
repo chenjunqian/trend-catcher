@@ -225,6 +225,21 @@ export async function triggerContainerAggregation(
   console.log(`[container-orch] Sending ${totalItems} items to container (ph=${rawData.producthunt.length}, hn=${rawData.hackernews.length}, gh=${rawData.github.length})`);
 
   const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "daily");
+
+  try {
+    console.log("[container-orch] Starting container...");
+    await (container as any).startAndWaitForPorts({
+      cancellationOptions: {
+        portReadyTimeoutMS: 60_000,
+        instanceGetTimeoutMS: 15_000,
+      },
+    });
+    console.log("[container-orch] Container ready");
+  } catch (err) {
+    console.error("[container-orch] Failed to start container:", (err as Error).message);
+    throw new Error(`Container start failed: ${(err as Error).message}`);
+  }
+
   const containerResp = await container.fetch(
     new Request("http://container/aggregate", {
       method: "POST",
