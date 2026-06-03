@@ -1,5 +1,4 @@
 import * as cheerio from "cheerio";
-import { fetchHtml } from "../utils/fetcher";
 
 export interface SearchResult {
   title: string;
@@ -24,26 +23,52 @@ export async function searchWeb(query: string): Promise<SearchResult[]> {
   const encodedQuery = encodeURIComponent(query);
   const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
 
-  const html = await fetchHtml(url);
-  const $ = cheerio.load(html);
-  const results: SearchResult[] = [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
 
-  $(".result").each((_, el) => {
-    const link = $(el).find(".result__a");
-    const snippetEl = $(el).find(".result__snippet");
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        Accept: "text/html,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
 
-    const title = link.text().trim();
-    const href = (link.attr("href") || "").trim();
-    const snippet = snippetEl.text().trim();
+    clearTimeout(timer);
 
-    if (!title || !href) return;
+    if (!response.ok) {
+      console.log(`[search] DDG HTTP ${response.status} for "${query.slice(0, 50)}"`);
+      return [];
+    }
 
-    const cleanUrl = extractRealUrl(href);
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const results: SearchResult[] = [];
 
-    if (!cleanUrl.startsWith("http")) return;
+    $(".result").each((_, el) => {
+      const link = $(el).find(".result__a");
+      const snippetEl = $(el).find(".result__snippet");
 
-    results.push({ title, url: cleanUrl, snippet });
-  });
+      const title = link.text().trim();
+      const href = (link.attr("href") || "").trim();
+      const snippet = snippetEl.text().trim();
 
-  return results.slice(0, 8);
+      if (!title || !href) return;
+
+      const cleanUrl = extractRealUrl(href);
+
+      if (!cleanUrl.startsWith("http")) return;
+
+      results.push({ title, url: cleanUrl, snippet });
+    });
+
+    return results.slice(0, 8);
+  } catch (err) {
+    clearTimeout(timer);
+    console.log(`[search] DDG failed for "${query.slice(0, 50)}": ${(err as Error).message}`);
+    return [];
+  }
 }
