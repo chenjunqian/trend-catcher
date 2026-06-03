@@ -227,35 +227,36 @@ export async function triggerContainerAggregation(
 
   const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "daily");
 
-  try {
-    console.log("[container-orch] Starting container...");
-    await (container as any).startAndWaitForPorts({
-      startOptions: {
-        envVars: { DEEPSEEK_API_KEY: deepseekApiKey },
-      },
-      cancellationOptions: {
-        portReadyTimeoutMS: 60_000,
-        instanceGetTimeoutMS: 30_000,
-      },
-    });
-    console.log("[container-orch] Container ready");
-  } catch (err) {
-    console.error("[container-orch] Failed to start container:", (err as Error).message);
-    throw new Error(`Container start failed: ${(err as Error).message}`);
+  const request = new Request("http://container/aggregate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, rawData, apiKey: deepseekApiKey }),
+  });
+
+  let containerResp: Response | undefined;
+  let lastError = "";
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const delay = attempt === 0 ? 0 : Math.pow(2, attempt) * 1000;
+    if (delay > 0) {
+      console.log(`[container-orch] Retry ${attempt}/${5}, waiting ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    try {
+      containerResp = await container.fetch(request.clone());
+      if (containerResp.ok) break;
+      const errText = await containerResp.text();
+      lastError = `HTTP ${containerResp.status}: ${errText.slice(0, 200)}`;
+      console.log(`[container-orch] Attempt ${attempt}: ${lastError}`);
+    } catch (err) {
+      lastError = (err as Error).message;
+      console.log(`[container-orch] Attempt ${attempt}: ${lastError}`);
+    }
   }
 
-  const containerResp = await container.fetch(
-    new Request("http://container/aggregate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, rawData }),
-    })
-  );
-
-  if (!containerResp.ok) {
-    const errText = await containerResp.text();
-    console.error(`[container-orch] Container returned ${containerResp.status}: ${errText}`);
-    throw new Error(`Container aggregation failed: HTTP ${containerResp.status}`);
+  if (!containerResp?.ok) {
+    throw new Error(`Container aggregation failed after retries: ${lastError}`);
   }
 
   const containerResult = (await containerResp.json()) as {
