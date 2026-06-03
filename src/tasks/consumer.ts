@@ -103,7 +103,8 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
         env.AGGREGATOR_CONTAINER,
         env.RESEND_API_KEY,
         env.NOTIFICATION_EMAIL,
-        date
+        date,
+        env.DEEPSEEK_API_KEY
       );
     } else {
       console.log("Using direct Worker aggregation (fallback)");

@@ -200,7 +200,8 @@ export async function triggerContainerAggregation(
   containerBinding: unknown,
   resendApiKey: string,
   notificationEmail: string,
-  date: string
+  date: string,
+  deepseekApiKey: string
 ) {
   console.log("[container-orch] Reading completed tasks for", date);
   const result = await getCompletedTasksByDate(db, date);
@@ -229,9 +230,12 @@ export async function triggerContainerAggregation(
   try {
     console.log("[container-orch] Starting container...");
     await (container as any).startAndWaitForPorts({
+      startOptions: {
+        envVars: { DEEPSEEK_API_KEY: deepseekApiKey },
+      },
       cancellationOptions: {
         portReadyTimeoutMS: 60_000,
-        instanceGetTimeoutMS: 15_000,
+        instanceGetTimeoutMS: 30_000,
       },
     });
     console.log("[container-orch] Container ready");

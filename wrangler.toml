@@ -40,6 +40,8 @@ NOTIFICATION_EMAIL = "chenjunqian0810@gmail.com"
 max_instances = 1
 class_name = "AggregatorContainer"
 image = "./Dockerfile"
+vcpu = 0.5
+memory_mib = 512
 
 [[durable_objects.bindings]]
 name = "AGGREGATOR_CONTAINER"
