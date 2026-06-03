@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import type { LanguageModelV1 } from "ai";
 import type { D1Database } from "@cloudflare/workers-types";
+import { getContainer } from "@cloudflare/containers";
 import { createDeepSeekModel } from "./llm";
 import { createAgentTools, type SiteSummaryEntry } from "./tools";
 import {
@@ -196,7 +197,7 @@ export async function runAggregation(
 
 export async function triggerContainerAggregation(
   db: D1Database,
-  containerBinding: { getByName(name: string): { fetch(req: Request): Promise<Response> } },
+  containerBinding: unknown,
   resendApiKey: string,
   notificationEmail: string,
   date: string
@@ -223,7 +224,7 @@ export async function triggerContainerAggregation(
   const totalItems = Object.values(rawData).reduce((s, arr) => s + arr.length, 0);
   console.log(`[container-orch] Sending ${totalItems} items to container (ph=${rawData.producthunt.length}, hn=${rawData.hackernews.length}, gh=${rawData.github.length})`);
 
-  const container = containerBinding.getByName("daily");
+  const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "daily");
   const containerResp = await container.fetch(
     new Request("http://container/aggregate", {
       method: "POST",
