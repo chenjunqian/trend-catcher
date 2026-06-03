@@ -10,7 +10,8 @@ import {
 import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
-import { runAggregation, triggerContainerAggregation } from "../aggregator/aggregate";
+import { runAggregation } from "../aggregator/aggregate";
+import { triggerContainerAggregation } from "../aggregator/container";
 import { sendDailyEmail } from "../notifier/email";
 import type { TaskMessage } from "./generator";
 
