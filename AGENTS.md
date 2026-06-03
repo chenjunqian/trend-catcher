@@ -24,12 +24,20 @@ Cron Trigger (UTC 1:00)
 Queue Consumer (concurrent, up to 5-min execution)
   → processors/*.ts: scrapes each website
   → Updates D1 task status to completed
-  → When all tasks done → triggers aggregation
+  → When all tasks done → triggers container aggregation
       ↓
-Agent Loop (aggregator/*.ts)
-  → LLM agent calls tools: getRawDataByWebsite → saveSiteSummary → saveFinalReport
-  → Saves bilingual (EN/ZH) reports to D1 daily_summaries table
-  → Sends email notification via Resend
+Container Orchestrator (aggregator/container.ts)
+  → getContainer() → DurableObjectStub for AggregatorContainer
+  → container.fetch() → retried with exponential backoff
+  → DO's containerFetch() starts Firecracker VM, boots Node.js server
+      ↓
+Container HTTP Server (container/server.ts)
+  → Receives raw scraped data + DeepSeek API key via POST /aggregate
+  → Creates in-memory agent tools (no D1 access needed)
+  → Runs LLM agent loop: getRawDataByWebsite → webSearch → saveSiteSummary → saveFinalReport
+  → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
+      ↓
+Orchestrator saves to D1 + sends email
       ↓
 Web Dashboard (Hono JSX)
   → GET /          : list of daily reports
@@ -42,6 +50,8 @@ Web Dashboard (Hono JSX)
 - **DeepSeek cache optimization**: System prompt and first user message are completely static (no dates, no dynamic data). Only tool results contain dynamic content. This maximizes prefix cache hits and reduces API costs.
 - **Idempotency**: Queue consumer checks `status === 'pending'` before processing. Tasks use `INSERT OR IGNORE`.
 - **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation.
+- **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). It is shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.
+- **Container retry logic**: Uses `container.fetch()` in a 6-attempt exponential backoff loop instead of `startAndWaitForPorts()` to work around a `@cloudflare/containers` race condition where `getTcpPort()` throws before the Firecracker VM reaches "running" state.
 
 ---
 
@@ -49,7 +59,8 @@ Web Dashboard (Hono JSX)
 
 ```
 trend-catcher/
-├── wrangler.toml              # CF Workers config (D1, Queue, Cron, Assets)
+├── wrangler.toml              # CF Workers config (D1, Queue, Cron, Assets, Containers)
+├── Dockerfile                 # Container image (Node.js 22 Alpine, tsx runtime)
 ├── package.json
 ├── tsconfig.json
 ├── .dev.vars                  # Local env vars (gitignored)
@@ -64,10 +75,10 @@ trend-catcher/
 │   └── android-chrome-512x512.png
 ├── scripts/
 │   ├── test-scrapers.ts       # Manual scraper test runner
-│   ├── it-test.ts             # Full integration test (scrape → D1 → LLM → email)
+│   ├── it-test.ts             # Full integration test (Phase 0: module check → Phase 4: Docker smoke)
 │   └── proxy.ts               # Auto-detect https_proxy for local dev
 ├── src/
-│   ├── index.tsx              # Hono app entry (routes, queue, cron, PWA)
+│   ├── index.tsx              # Hono app entry (routes, queue, cron, PWA, AggregatorContainer DO)
 │   ├── db/
 │   │   ├── schema.sql         # D1 table definitions
 │   │   └── client.ts          # D1 query helpers (CRUD)
@@ -80,8 +91,12 @@ trend-catcher/
 │   │       └── github.ts      # cheerio HTML scraper
 │   ├── aggregator/
 │   │   ├── llm.ts             # DeepSeek provider setup
-│   │   ├── tools.ts           # Agent tools (getRawData, saveSummary, saveReport)
-│   │   └── aggregate.ts       # Agent loop: system prompt + generateText
+│   │   ├── tools.ts           # Agent tools (createAgentTools for Worker, createInMemoryAgentTools for Container)
+│   │   ├── aggregate.ts       # Agent loop: runAgentLoop, runAggregation (shared, NO Workers-only imports)
+│   │   ├── container.ts       # Container orchestrator: triggerContainerAggregation (Workers-only imports OK)
+│   │   └── search.ts          # DuckDuckGo HTML search (shared)
+│   ├── container/
+│   │   └── server.ts          # Container Node.js HTTP server (imports from aggregator/, no Workers deps)
 │   ├── notifier/
 │   │   └── email.ts           # Resend email with bilingual report
 │   ├── routes/
@@ -112,6 +127,9 @@ npx tsc --noEmit
 
 # Test scrapers manually
 npm run test:scrapers
+
+# Full integration test (Phase 0: container module check → Phase 4: Docker smoke test)
+npm run it-test
 
 # Local D1 operations
 npm run db:migrate:local       # Run schema.sql on local D1
@@ -186,6 +204,8 @@ src/
 | `tasks/consumer.ts` | Integration | Workers pool, mock fetch calls |
 | `aggregator/tools.ts` | Unit | Mock D1, verify tool execute shapes |
 | `aggregator/aggregate.ts` | Unit | Mock `generateText`, verify prompts |
+| `aggregator/container.ts` | Unit | Mock `@cloudflare/containers`, verify retry logic |
+| `container/server.ts` | Integration | IT test Phase 0 (real Node.js import check), Phase 4 (Docker smoke test) |
 | `routes/*.tsx` | Integration | Workers pool, test HTTP responses |
 | `i18n/index.ts` | Unit | Pure functions, no mocking needed |
 | `pwa/*.ts` | Unit | Verify manifest shape, SW content |
@@ -226,6 +246,12 @@ npx tsc --noEmit && npx vitest run
 ```
 
 Both MUST pass. If either fails, fix before committing.
+
+When changing files in the container's import chain (`aggregator/aggregate.ts`, `aggregator/tools.ts`, `aggregator/llm.ts`, `aggregator/search.ts`, `utils/fetcher.ts`), also run IT test Phase 0 to verify no Workers-only imports leaked:
+
+```bash
+npm run it-test    # or at minimum, verify Phase 0 passes
+```
 
 ---
 
@@ -308,6 +334,9 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 
 - **Cloudflare free tier**: Cron trigger must finish within 10ms CPU (only enqueue tasks, no I/O)
 - **Queue consumer**: Up to 5-minute execution window — scrapers + aggregation run here
+- **Container isolation**: `src/aggregator/aggregate.ts` must NOT import `@cloudflare/containers` or `cloudflare:workers` — these modules don't exist in Node.js. The container server crashes on import if this is violated.
+- **Container resources**: 0.0625 vCPU / 256 MiB — minimal; LLM tasks are network-I/O bound so this is sufficient.
+- **Container networking**: Private mode — Docker image must have all dependencies pre-installed (no runtime `npm install`/`npx` downloads).
 - **Cheerio in Workers**: Requires `nodejs_compat` compatibility flag
 - **Product Hunt**: Homepage HTML is Cloudflare-protected. Use Atom RSS feed at `/feed` instead
 - **Hacker News**: Use official Firebase API (free, no auth, rate-limited at ~10k/hour)
