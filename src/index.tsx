@@ -4,22 +4,30 @@ import type {
   Queue,
   ScheduledController,
   MessageBatch,
+  DurableObjectNamespace,
 } from "@cloudflare/workers-types";
+import { Container } from "@cloudflare/containers";
 import Home from "./routes/home";
 import Report from "./routes/report";
 import { getRecentSummaries, getSummaryByDate } from "./db/client";
 import { generateAndEnqueueTasks } from "./tasks/generator";
 import { queueConsumer } from "./tasks/consumer";
-import { runAggregation } from "./aggregator/aggregate";
+import { runAggregation, triggerContainerAggregation } from "./aggregator/aggregate";
 import { sendDailyEmail } from "./notifier/email";
 import { getTodayDateString } from "./utils/date";
 import { detectLang } from "./i18n";
 import type { TaskMessage } from "./tasks/generator";
 import { manifest } from "./pwa/manifest";
 
+export class AggregatorContainer extends Container {
+  defaultPort = 4000;
+  sleepAfter = "10m";
+}
+
 type Bindings = {
   DB: D1Database;
   SCRAPE_QUEUE: Queue<TaskMessage>;
+  AGGREGATOR_CONTAINER: DurableObjectNamespace;
   DEEPSEEK_API_KEY: string;
   RESEND_API_KEY: string;
   NOTIFICATION_EMAIL: string;
@@ -53,7 +61,7 @@ app.get("/reports/:date", async (c) => {
 
 // Internal endpoint: manually trigger aggregation + email
 app.post("/internal/aggregate", async (c) => {
-  const { DB, DEEPSEEK_API_KEY, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
@@ -64,23 +72,30 @@ app.post("/internal/aggregate", async (c) => {
     return c.json({ error: "DEEPSEEK_API_KEY not configured" }, 500);
   }
 
-  c.executionCtx.waitUntil(
-    (async () => {
-      try {
-        const date = getTodayDateString();
-        console.log("Starting aggregation for", date);
-        await runAggregation(DB, DEEPSEEK_API_KEY, date);
-        console.log("Aggregation complete, sending email");
+  try {
+    const date = getTodayDateString();
 
-        await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
-        console.log("Email sent");
-      } catch (err) {
-        console.error("Aggregation failed:", err);
-      }
-    })()
-  );
+    if (AGGREGATOR_CONTAINER) {
+      console.log("Starting container aggregation for", date);
+      await triggerContainerAggregation(
+        DB,
+        AGGREGATOR_CONTAINER,
+        RESEND_API_KEY,
+        NOTIFICATION_EMAIL,
+        date
+      );
+      return c.json({ ok: true, message: "Aggregation completed via container" });
+    }
 
-  return c.json({ ok: true, message: "Aggregation started" });
+    // Fallback: run aggregation directly in Worker
+    console.log("Starting direct aggregation for", date);
+    await runAggregation(DB, DEEPSEEK_API_KEY, date);
+    await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
+    return c.json({ ok: true, message: "Aggregation completed directly" });
+  } catch (err) {
+    console.error("Aggregation failed:", err);
+    return c.json({ error: (err as Error).message }, 500);
+  }
 });
 
 // PWA routes

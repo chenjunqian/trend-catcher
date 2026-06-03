@@ -2,11 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import type { ToolExecutionOptions } from "ai";
 import { createAgentTools } from "./tools";
 
-// webSearch temporarily disabled — see PR #3
-// vi.mock("./search", () => ({
-//   searchWeb: vi.fn(),
-// }));
-// import { searchWeb } from "./search";
+vi.mock("./search", () => ({
+  searchWeb: vi.fn(),
+}));
+
+import { searchWeb } from "./search";
 
 const execOpts = {} as ToolExecutionOptions;
 
@@ -110,9 +110,7 @@ describe("createAgentTools", () => {
     });
   });
 
-  // webSearch temporarily disabled — see PR #3
-  /*
-  describe.skip("webSearch", () => {
+  describe("webSearch", () => {
     it("returns search results", async () => {
       const m = mockD1();
       const db = m as unknown as D1Database;
@@ -147,7 +145,6 @@ describe("createAgentTools", () => {
       expect(searchWeb).toHaveBeenCalledWith("a".repeat(500));
     });
   });
-  */
 
   describe("saveFinalReport", () => {
     it("saves a bilingual final report", async () => {

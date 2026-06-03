@@ -114,6 +114,18 @@ export function getCompletedTasksByDateAndWebsite(
     .all();
 }
 
+export function getCompletedTasksByDate(
+  db: D1Database,
+  date: string
+): Promise<D1Result<ScrapeTask>> {
+  return db
+    .prepare(
+      "SELECT * FROM scrape_tasks WHERE scheduled_date = ? AND status = 'completed'"
+    )
+    .bind(date)
+    .all();
+}
+
 export function getPendingTaskCountForDate(
   db: D1Database,
   date: string

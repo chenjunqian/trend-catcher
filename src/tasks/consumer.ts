@@ -1,6 +1,6 @@
 // Queue consumer: processes scrape tasks, then triggers aggregation when all tasks complete.
 
-import type { D1Database, MessageBatch } from "@cloudflare/workers-types";
+import type { D1Database, MessageBatch, DurableObjectNamespace } from "@cloudflare/workers-types";
 import {
   getTaskById,
   updateTaskToProcessing,
@@ -10,12 +10,13 @@ import {
 import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
-import { runAggregation } from "../aggregator/aggregate";
+import { runAggregation, triggerContainerAggregation } from "../aggregator/aggregate";
 import { sendDailyEmail } from "../notifier/email";
 import type { TaskMessage } from "./generator";
 
 export interface Env {
   DB: D1Database;
+  AGGREGATOR_CONTAINER?: DurableObjectNamespace;
   DEEPSEEK_API_KEY: string;
   RESEND_API_KEY: string;
   NOTIFICATION_EMAIL: string;
@@ -94,11 +95,23 @@ export async function queueConsumer(
 async function triggerAggregation(env: Env, date: string): Promise<void> {
   try {
     console.log("All tasks completed, starting aggregation...");
-    await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
-    console.log("Aggregation complete, sending email...");
 
-    await sendDailyEmail(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL, date);
-    console.log("Email sent");
+    if (env.AGGREGATOR_CONTAINER) {
+      console.log("Using container for aggregation");
+      await triggerContainerAggregation(
+        env.DB,
+        env.AGGREGATOR_CONTAINER,
+        env.RESEND_API_KEY,
+        env.NOTIFICATION_EMAIL,
+        date
+      );
+    } else {
+      console.log("Using direct Worker aggregation (fallback)");
+      await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
+      console.log("Aggregation complete, sending email...");
+      await sendDailyEmail(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL, date);
+      console.log("Email sent");
+    }
   } catch (err) {
     console.error("Aggregation failed:", err);
   }

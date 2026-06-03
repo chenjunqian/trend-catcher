@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.1.13",
+    "@cloudflare/containers": "^0.3.6",
     "ai": "^4.1.37",
     "cheerio": "^1.0.0",
     "hono": "^4.6.16",
