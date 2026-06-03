@@ -43,6 +43,21 @@ async function main() {
   console.log("╚══════════════════════════════════════════════╝");
   console.log(`  Date: ${DATE}\n`);
 
+  // ── Phase 0: Container module import check ─────
+  console.log("── Phase 0: Container module check ──");
+  try {
+    await import("../src/container/server");
+    console.log("  [CT]  ✅ Container modules load in Node.js\n");
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.log(`  [CT]  ❌ ${msg}`);
+    if (msg.includes("@cloudflare/containers") || msg.includes("cloudflare:workers")) {
+      console.log("  [CT]  ^ Workers-only import leaked into container dependency chain.");
+    }
+    console.log("");
+    process.exit(1);
+  }
+
   // ── Phase 1: Scrape ────────────────────────────
   console.log("── Phase 1: Scraping ──");
 
@@ -113,6 +128,79 @@ async function main() {
       `    curl -s -X POST http://localhost:8787/internal/aggregate -H "Authorization: Bearer ${SECRET}"`
     );
   }
+
+  // ── Phase 4: Docker smoke test ─────────────────
+  console.log("\n── Phase 4: Container Docker test ──");
+
+  let dockerAvailable = false;
+  try {
+    execSync("docker info", { stdio: "ignore" });
+    dockerAvailable = true;
+  } catch {
+    // Docker not available
+  }
+
+  if (!dockerAvailable) {
+    console.log("  [CT]  ⚠️  Docker not available, skipped\n");
+  } else {
+    try {
+      console.log("  [CT]  Building image...");
+      execSync("docker build -t trend-catcher-it-test .", {
+        stdio: "pipe",
+        timeout: 300_000,
+      });
+      console.log("  [CT]  ✅ Image built");
+
+      console.log("  [CT]  Starting container...");
+      const cid = execSync(
+        "docker run -d -p 14002:4000 trend-catcher-it-test",
+        { encoding: "utf8" }
+      ).trim();
+
+      await new Promise((r) => setTimeout(r, 4000));
+
+      const running = execSync(
+        `docker inspect ${cid} --format='{{.State.Running}}'`,
+        { encoding: "utf8" }
+      ).trim();
+
+      if (running !== "true") {
+        console.log(`  [CT]  ❌ Container exited immediately:`);
+        const logs = execSync(`docker logs ${cid}`, { encoding: "utf8" }).trim();
+        console.log(`  ${logs.split("\n").join("\n  ")}`);
+        execSync(`docker rm -f ${cid}`, { stdio: "ignore" });
+        process.exit(1);
+      }
+
+      console.log("  [CT]  ✅ Container running, testing endpoint...");
+
+      const testBody = JSON.stringify({ date: "it-test", rawData: {}, apiKey: "test" });
+      const escapedBody = testBody.replace(/'/g, "'\\''");
+      const curlResult = execSync(
+        `curl -s -w "\\nHTTP:%{http_code}" http://localhost:14002/aggregate -X POST -H "Content-Type: application/json" -d '${escapedBody}'`,
+        { encoding: "utf8", timeout: 10_000 }
+      ).trim();
+
+      execSync(`docker rm -f ${cid}`, { stdio: "ignore" });
+
+      if (curlResult.includes("HTTP:200") || curlResult.includes("HTTP:500")) {
+        console.log(`  [CT]  ✅ Endpoint responds: ${curlResult.split("\nHTTP:")[0]}`);
+        console.log("  [CT]  ✅ Docker smoke test passed\n");
+      } else {
+        console.log(`  [CT]  ❌ Unexpected response: ${curlResult}`);
+        process.exit(1);
+      }
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes("Docker")) {
+        console.log(`  [CT]  ❌ ${msg}\n`);
+      } else {
+        console.log(`  [CT]  ❌ ${msg}\n`);
+      }
+      process.exit(1);
+    }
+  }
+
   console.log("");
   console.log("── Verify ──");
   console.log("  Open:  http://localhost:8787");

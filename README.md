@@ -19,8 +19,12 @@ Generator ──► Queue ──► Scrapers
                          └── GitHub Trending (HTML)
                               │
                               ▼
-                         Aggregator
-                    (DeepSeek LLM Agent)
+                    Container Orchestrator
+              (starts Firecracker VM, sends data)
+                              │
+                              ▼
+                     Container (Node.js)
+                  (DeepSeek LLM Agent Loop)
                               │
                     ┌─────────┴─────────┐
                     ▼                   ▼
@@ -35,6 +39,7 @@ Generator ──► Queue ──► Scrapers
 
 - **3 Data Sources** — Product Hunt, Hacker News, GitHub Trending scraped daily
 - **AI Summaries** — DeepSeek LLM generates bilingual (English / Chinese) reports
+- **Container Isolation** — LLM agent loop runs in a Cloudflare Container (Firecracker VM) for extended execution
 - **Email Delivery** — Daily reports sent via Resend to your inbox
 - **Web Dashboard** — View reports via browser with i18n support (`?lang=en` / `?lang=zh`)
 - **PWA** — Installable as a standalone app with offline support
@@ -45,6 +50,7 @@ Generator ──► Queue ──► Scrapers
 | Layer           | Technology                              |
 | --------------- | --------------------------------------- |
 | Runtime         | Cloudflare Workers                      |
+| Container       | Cloudflare Containers (Firecracker VM)  |
 | Framework       | Hono.js (JSX server-side rendering)     |
 | Database        | Cloudflare D1 (SQLite)                  |
 | Queue           | Cloudflare Queues                       |
@@ -58,15 +64,16 @@ Generator ──► Queue ──► Scrapers
 ```
 trend-catcher/
 ├── wrangler.toml              # Cloudflare Workers config
+├── Dockerfile                 # Container image (Node.js server)
 ├── package.json
 ├── tsconfig.json
 ├── public/                    # Static assets (icons, manifest)
 ├── scripts/
 │   ├── test-scrapers.ts       # Manual scraper test runner
-│   ├── it-test.ts             # Full integration test
+│   ├── it-test.ts             # Full integration test (scrape → D1 → LLM → container smoke)
 │   └── proxy.ts               # Auto-detect https_proxy for local dev
 └── src/
-    ├── index.tsx              # Hono app entry (routes, queue, cron, PWA)
+    ├── index.tsx              # Hono app entry (routes, queue, cron, PWA, Container DO)
     ├── db/
     │   ├── schema.sql         # D1 table definitions
     │   └── client.ts          # D1 query helpers
@@ -79,8 +86,12 @@ trend-catcher/
     │       └── github.ts      # cheerio HTML scraper
     ├── aggregator/
     │   ├── llm.ts             # DeepSeek provider setup
-    │   ├── tools.ts           # Agent tools (getRawData, saveSummary, saveReport)
-    │   └── aggregate.ts       # Agent loop: system prompt + generateText
+    │   ├── tools.ts           # Agent tools (D1-backed + in-memory variants)
+    │   ├── aggregate.ts       # Agent loop: system prompt + generateText (shared)
+    │   ├── container.ts       # Container orchestrator: start, send data, save results
+    │   └── search.ts          # Web search via DuckDuckGo HTML
+    ├── container/
+    │   └── server.ts          # Container HTTP server (Node.js, receives data, runs LLM agent)
     ├── notifier/
     │   └── email.ts           # Resend email sender
     ├── routes/
@@ -102,6 +113,7 @@ trend-catcher/
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
+- [Docker](https://www.docker.com/) (for container smoke test; optional for development)
 - A Cloudflare account (free tier works)
 - [DeepSeek API key](https://platform.deepseek.com/)
 - [Resend API key](https://resend.com/)
@@ -204,7 +216,7 @@ The cron trigger (UTC 1:00 AM daily) will activate automatically after deploymen
 | POST   | `/internal/trigger`    | Manually trigger today's full pipeline         |
 | POST   | `/internal/test-email` | Send a test email to `NOTIFICATION_EMAIL`      |
 | POST   | `/internal/scrape`     | Run scrapers only (no aggregation/email)        |
-| POST   | `/internal/aggregate`  | Run aggregation from completed scrape tasks     |
+| POST   | `/internal/aggregate`  | Run aggregation via container (or fallback direct Worker)
 
 ## License
 
