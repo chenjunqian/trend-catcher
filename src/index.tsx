@@ -21,7 +21,7 @@ import { manifest } from "./pwa/manifest";
 
 export class AggregatorContainer extends Container {
   defaultPort = 4000;
-  sleepAfter = "10m";
+  sleepAfter = "20s";
 }
 
 type Bindings = {
@@ -82,7 +82,8 @@ app.post("/internal/aggregate", async (c) => {
         AGGREGATOR_CONTAINER,
         RESEND_API_KEY,
         NOTIFICATION_EMAIL,
-        date
+        date,
+        DEEPSEEK_API_KEY
       );
       return c.json({ ok: true, message: "Aggregation completed via container" });
     }
