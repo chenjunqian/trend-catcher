@@ -20,7 +20,8 @@
     "ai": "^4.1.37",
     "cheerio": "^1.0.0",
     "hono": "^4.6.16",
-    "resend": "^4.1.2"
+    "resend": "^4.1.2",
+    "tsx": "^4.22.4"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.11",
