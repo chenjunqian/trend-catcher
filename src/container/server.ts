@@ -26,19 +26,14 @@ const server = createServer(async (req, res) => {
 
   try {
     const body = await readBody(req);
-    const { date, rawData } = JSON.parse(body) as {
+    const { date, rawData, apiKey } = JSON.parse(body) as {
       date: string;
       rawData: Record<string, unknown[]>;
+      apiKey: string;
     };
 
-    if (!date || !rawData) {
-      json(res, 400, { success: false, error: "Missing date or rawData" });
-      return;
-    }
-
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!apiKey) {
-      json(res, 500, { success: false, error: "DEEPSEEK_API_KEY not set" });
+    if (!date || !rawData || !apiKey) {
+      json(res, 400, { success: false, error: "Missing date, rawData, or apiKey" });
       return;
     }
 
