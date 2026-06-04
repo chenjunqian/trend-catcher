@@ -17,7 +17,7 @@ export function renderMarkdown(md: string): string {
 
 export function stripMarkdownPreview(md: string, maxLen: number = 200): string {
   return md
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/^#+\s/gm, "")
     .replace(/\n\n/g, " ")
