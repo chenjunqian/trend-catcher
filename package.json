@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --local",
+    "dev": "DOCKER_BUILDKIT=1 wrangler dev --local",
     "deploy": "wrangler deploy",
     "db:create": "wrangler d1 create trend-catcher-db",
     "db:migrate": "wrangler d1 execute trend-catcher-db --file=./src/db/schema.sql",
