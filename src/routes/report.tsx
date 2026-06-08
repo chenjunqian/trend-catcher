@@ -63,12 +63,12 @@ const Report: FC<ReportProps> = ({ summary, lang, path }) => {
         {lang === "en" && (
           <div class="lang-section">
             <h2>
-              {t(lang, "report.overall")} (English)
+              {t(lang, "report.overall")}
             </h2>
             {summary.full_report_en ? (
               <ReportContent html={renderMarkdown(summary.full_report_en)} />
             ) : (
-              <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
+              <p style="color: #999;">{t(lang, "report.empty")}</p>
             )}
           </div>
         )}
@@ -76,12 +76,12 @@ const Report: FC<ReportProps> = ({ summary, lang, path }) => {
         {lang === "zh" && (
           <div class="lang-section">
             <h2>
-              {t(lang, "report.overall")} (中文)
+              {t(lang, "report.overall")}
             </h2>
             {summary.full_report_zh ? (
               <ReportContent html={renderMarkdown(summary.full_report_zh)} />
             ) : (
-              <p style="color: #8b949e;">{t(lang, "report.empty")}</p>
+              <p style="color: #999;">{t(lang, "report.empty")}</p>
             )}
           </div>
         )}
