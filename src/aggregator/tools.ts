@@ -57,17 +57,17 @@ export function createAgentTools(db: D1Database, date: string) {
 
   const saveSiteSummary = tool({
     description:
-      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 trending products/projects with category tags like [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product mentioned.",
+      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
-        .describe("English summary of today's trends for this website (400-600 chars). List up to 10 items with [Category] tags and Markdown links."),
+        .describe("English summary (400-600 chars). Each item on its own bullet line: \"- [Category] [Name](URL) — description\". Max 10 items."),
       summaryZh: z
         .string()
-        .describe("Chinese summary of today's trends for this website (400-600 chars). List up to 10 items with [Category] tags and Markdown links."),
+        .describe("Chinese summary (400-600 chars). Same bullet list format. Max 10 items."),
     }),
     execute: async ({ website, summaryEn, summaryZh }) => {
       console.log(`[tool] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
@@ -251,17 +251,17 @@ export function createInMemoryAgentTools(
 
   const saveSiteSummary = tool({
     description:
-      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 trending products/projects with category tags like [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product mentioned.",
+      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
-        .describe("English summary of today's trends for this website (400-600 chars). List up to 10 items with [Category] tags and Markdown links."),
+        .describe("English summary (400-600 chars). Each item on its own bullet line: \"- [Category] [Name](URL) — description\". Max 10 items."),
       summaryZh: z
         .string()
-        .describe("Chinese summary of today's trends for this website (400-600 chars). List up to 10 items with [Category] tags and Markdown links."),
+        .describe("Chinese summary (400-600 chars). Same bullet list format. Max 10 items."),
     }),
     execute: async ({ website, summaryEn, summaryZh }) => {
       console.log(`[tool:mem] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);

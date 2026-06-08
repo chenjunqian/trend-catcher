@@ -114,10 +114,10 @@ app.get("/offline", (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Offline — Trend Catcher</title>
         <style>{`
-          body { font-family: sans-serif; background: #0f1117; color: #e1e4e8; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          body { font-family: sans-serif; background: #fff; color: #111; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
           .box { text-align: center; }
           .box h1 { font-size: 24px; color: #f78166; }
-          .box p { color: #8b949e; margin-top: 8px; }
+          .box p { color: #666; margin-top: 8px; }
         `}</style>
       </head>
       <body>

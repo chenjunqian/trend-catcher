@@ -20,11 +20,11 @@ describe("manifest", () => {
   });
 
   it("has theme_color set", () => {
-    expect(manifest.theme_color).toBe("#000000");
+    expect(manifest.theme_color).toBe("#ffffff");
   });
 
   it("has background_color set", () => {
-    expect(manifest.background_color).toBe("#000000");
+    expect(manifest.background_color).toBe("#ffffff");
   });
 
   it("has at least one icon", () => {

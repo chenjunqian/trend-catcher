@@ -16,7 +16,7 @@ Your tools and workflow:
 
 2. Review the raw data from each website. For the most promising/interesting products and topics, use webSearch to research them deeply — look for product details, launch context, market positioning, competitor landscape, community reception, and business model. Use at least 3-5 webSearch calls per website to gather rich context.
 
-3. Analyze the data for each website and identify up to 10 noteworthy products or topics per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], etc. When mentioning products, ALWAYS use Markdown link format [Name](URL) using the URL/links from the raw data. Incorporate insights from webSearch into each item's description.
+3. Analyze the data for each website and identify up to 10 noteworthy products or topics per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], etc. Format each item on its own Markdown bullet list line: "- [Category] [Name](URL) — description". Do NOT write prose paragraphs. ALWAYS use Markdown link format [Name](URL) from the raw data. Incorporate insights from webSearch into each item's description.
 
 4. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links.
 
@@ -38,8 +38,8 @@ const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
 const SUMMARY_PROMPT = `You are a trend analyst. Given the following raw trending data for a website, generate a bilingual summary.
 
 Requirements:
-- English summary (400-600 chars): list up to 10 noteworthy items with [Category] tags (e.g. [AI], [SaaS], [DevTools], [Open Source], etc.). Include a brief reason why each is notable. Use [Name](URL) Markdown links for every item.
-- Chinese summary (400-600 chars): same content in Chinese. Use [Name](URL) Markdown links and [Category] tags.
+- English summary (400-600 chars): format each item on its own bullet line: "- [Category] [Name](URL) — brief reason". Max 10 items. Use [Name](URL) Markdown links for every item.
+- Chinese summary (400-600 chars): same bullet list format in Chinese. Use [Name](URL) Markdown links and [Category] tags.
 
 Return your response as JSON: {"en": "...", "zh": "..."}`;
 
