@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolExecutionOptions } from "ai";
 import { createAgentTools } from "./tools";
+import { newStmt, mockD1 } from "../test-utils/d1-mock";
 
 vi.mock("./search", () => ({
   searchWeb: vi.fn(),
@@ -9,29 +10,6 @@ vi.mock("./search", () => ({
 import { searchWeb } from "./search";
 
 const execOpts = {} as ToolExecutionOptions;
-
-function newStmt() {
-  const s = {
-    bind: vi.fn(),
-    run: vi.fn(),
-    first: vi.fn(),
-    all: vi.fn(),
-  };
-  s.bind.mockReturnValue(s);
-  s.run.mockResolvedValue({ success: true });
-  s.first.mockResolvedValue(null);
-  s.all.mockResolvedValue({ results: [] });
-  return s;
-}
-
-function mockD1(stmt?: ReturnType<typeof newStmt>) {
-  const s = stmt ?? newStmt();
-  return {
-    prepare: vi.fn().mockReturnValue(s),
-    batch: vi.fn().mockResolvedValue([]),
-    _stmt: s,
-  };
-}
 
 describe("createAgentTools", () => {
   const date = "2026-06-01";

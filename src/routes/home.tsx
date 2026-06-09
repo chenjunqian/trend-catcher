@@ -1,5 +1,5 @@
 import type { FC } from "hono/jsx";
-import type { DailySummary } from "../db/client";
+import type { DailySummary, WeeklySummary } from "../db/client";
 import type { Lang } from "../i18n";
 import { t } from "../i18n";
 import Layout from "./layout";
@@ -9,33 +9,74 @@ const ContentHtml: FC<{ html: string }> = ({ html }) => (
   <span dangerouslySetInnerHTML={{ __html: html }} />
 );
 
+interface HomeItem {
+  type: "daily" | "weekly";
+  displayDate: string;
+  report: string;
+  created_at: number;
+}
+
 interface HomeProps {
-  summaries: Pick<
+  dailySummaries: Pick<
     DailySummary,
-    "summary_date" | "full_report_en" | "full_report_zh"
+    "summary_date" | "full_report_en" | "full_report_zh" | "created_at"
+  >[];
+  weeklySummaries: Pick<
+    WeeklySummary,
+    "week_start_date" | "full_report_en" | "full_report_zh" | "created_at"
   >[];
   lang: Lang;
   path: string;
 }
 
-const Home: FC<HomeProps> = ({ summaries, lang, path }) => {
+const Home: FC<HomeProps> = ({ dailySummaries, weeklySummaries, lang, path }) => {
+  const items: HomeItem[] = [
+    ...dailySummaries.map((s) => ({
+      type: "daily" as const,
+      displayDate: s.summary_date,
+      report: lang === "zh" ? s.full_report_zh : s.full_report_en,
+      created_at: s.created_at,
+    })),
+    ...weeklySummaries.map((s) => ({
+      type: "weekly" as const,
+      displayDate: s.week_start_date,
+      report: lang === "zh" ? s.full_report_zh : s.full_report_en,
+      created_at: s.created_at,
+    })),
+  ];
+
+  items.sort((a, b) => b.created_at - a.created_at);
+
   return (
     <Layout title={t(lang, "site.subtitle")} lang={lang} path={path}>
       <h2 style={{ fontSize: "22px", marginBottom: "24px" }}>
         {t(lang, "home.heading")}
       </h2>
 
-      {summaries.length === 0 ? (
+      {items.length === 0 ? (
         <div class="empty">
           <p style={{ fontSize: "16px" }}>{t(lang, "home.empty")}</p>
         </div>
       ) : (
-        summaries.map((s) => {
-          const report =
-            lang === "zh" ? s.full_report_zh : s.full_report_en;
+        items.map((item) => {
+          const href =
+            item.type === "weekly"
+              ? `/reports/weekly/${item.displayDate}?lang=${lang}`
+              : `/reports/${item.displayDate}?lang=${lang}`;
+
+          const badgeText =
+            item.type === "weekly"
+              ? t(lang, "badge.weekly")
+              : t(lang, "badge.daily");
+
+          const label =
+            item.type === "weekly"
+              ? `${t(lang, "report.week_label", { date: item.displayDate })}`
+              : item.displayDate;
+
           return (
             <a
-              href={`/reports/${s.summary_date}?lang=${lang}`}
+              href={href}
               style="text-decoration: none; color: inherit;"
             >
               <div class="card">
@@ -46,12 +87,12 @@ const Home: FC<HomeProps> = ({ summaries, lang, path }) => {
                     justifyContent: "space-between",
                   }}
                 >
-                  <h3>{s.summary_date}</h3>
-                  <span class="badge">{t(lang, "badge.daily")}</span>
+                  <h3>{label}</h3>
+                  <span class="badge">{badgeText}</span>
                 </div>
                 <p>
-                  {report
-                    ? <ContentHtml html={stripMarkdownPreview(report)} />
+                  {item.report
+                    ? <ContentHtml html={stripMarkdownPreview(item.report)} />
                     : "..."}
                 </p>
               </div>

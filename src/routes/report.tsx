@@ -1,5 +1,5 @@
 import type { FC } from "hono/jsx";
-import type { DailySummary } from "../db/client";
+import type { DailySummary, WeeklySummary } from "../db/client";
 import type { Lang } from "../i18n";
 import { t, switchLang } from "../i18n";
 import type { SiteSummaryEntry } from "../aggregator/tools";
@@ -7,9 +7,10 @@ import Layout from "./layout";
 import { renderMarkdown } from "./markdown";
 
 interface ReportProps {
-  summary: DailySummary;
+  summary: DailySummary | WeeklySummary;
   lang: Lang;
   path: string;
+  isWeekly?: boolean;
 }
 
 function parseSiteSummaries(raw: string): Record<string, SiteSummaryEntry> {
@@ -26,18 +27,24 @@ const SITE_LABELS: Record<string, string> = {
   github: "GitHub Trending",
 };
 
-const Report: FC<ReportProps> = ({ summary, lang, path }) => {
+function getReportDate(summary: DailySummary | WeeklySummary, isWeekly?: boolean): string {
+  if (isWeekly) return (summary as WeeklySummary).week_start_date;
+  return (summary as DailySummary).summary_date;
+}
+
+const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
   const siteSummaries = parseSiteSummaries(summary.site_summaries);
   const altLang = switchLang(lang);
+  const displayDate = getReportDate(summary, isWeekly);
 
   return (
-    <Layout title={`${summary.summary_date}`} lang={lang} path={path}>
+    <Layout title={`${displayDate}`} lang={lang} path={path}>
       <a href={`/?lang=${lang}`} class="back-link">
         {t(lang, "report.back")}
       </a>
 
       <h2 style={{ fontSize: "22px", marginBottom: "16px" }}>
-        {summary.summary_date} {t(lang, "report.heading")}
+        {displayDate} {t(lang, isWeekly ? "report.weekly_heading" : "report.heading")}
       </h2>
 
       {Object.keys(siteSummaries).length > 0 && (

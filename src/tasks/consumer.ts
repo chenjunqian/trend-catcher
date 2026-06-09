@@ -11,8 +11,9 @@ import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
 import { runAggregation } from "../aggregator/aggregate";
-import { triggerContainerAggregation } from "../aggregator/container";
-import { sendDailyEmail } from "../notifier/email";
+import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
+import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
+import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import type { TaskMessage } from "./generator";
 
 export interface Env {
@@ -48,6 +49,9 @@ async function processTask(
       case "github":
         rawData = await fetchGitHubTrending();
         break;
+      case "weekly":
+        await updateTaskStatus(db, message.id, "completed");
+        return;
       default:
         throw new Error(`Unknown website: ${message.website}`);
     }
@@ -70,6 +74,21 @@ export async function queueConsumer(
   env: Env,
   ctx: ExecutionContext
 ): Promise<void> {
+  const firstMsg = batch.messages[0];
+  if (!firstMsg) return;
+
+  if (firstMsg.body.type === "weekly") {
+    const weekStartDate = firstMsg.body.scheduled_date;
+    try {
+      await processTask(env.DB, firstMsg.body);
+      firstMsg.ack();
+      ctx.waitUntil(triggerWeeklyAggregation(env, weekStartDate));
+    } catch {
+      firstMsg.retry();
+    }
+    return;
+  }
+
   const promises = batch.messages.map(async (msg) => {
     try {
       await processTask(env.DB, msg.body);
@@ -82,14 +101,11 @@ export async function queueConsumer(
   await Promise.all(promises);
 
   // Check if all tasks for today are done
-  const firstMsg = batch.messages[0];
-  if (firstMsg) {
-    const date = firstMsg.body.scheduled_date;
-    const remaining = await getPendingTaskCountForDate(env.DB, date);
+  const date = firstMsg.body.scheduled_date;
+  const remaining = await getPendingTaskCountForDate(env.DB, date);
 
-    if (remaining === 0) {
-      ctx.waitUntil(triggerAggregation(env, date));
-    }
+  if (remaining === 0) {
+    ctx.waitUntil(triggerAggregation(env, date));
   }
 }
 
@@ -116,5 +132,31 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
     }
   } catch (err) {
     console.error("Aggregation failed:", err);
+  }
+}
+
+async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promise<void> {
+  try {
+    console.log("Starting weekly aggregation...");
+
+    if (env.AGGREGATOR_CONTAINER) {
+      console.log("Using container for weekly aggregation");
+      await triggerWeeklyContainerAggregation(
+        env.DB,
+        env.AGGREGATOR_CONTAINER,
+        env.RESEND_API_KEY,
+        env.NOTIFICATION_EMAIL,
+        weekStartDate,
+        env.DEEPSEEK_API_KEY
+      );
+    } else {
+      console.log("Using direct Worker weekly aggregation (fallback)");
+      await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
+      console.log("Weekly aggregation complete, sending email...");
+      await sendWeeklyEmail(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL, weekStartDate);
+      console.log("Weekly email sent");
+    }
+  } catch (err) {
+    console.error("Weekly aggregation failed:", err);
   }
 }

@@ -1,12 +1,12 @@
 import { execSync } from "child_process";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, readFileSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import "./proxy";
 import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
-import { getTodayDateString } from "../src/utils/date";
+import { getTodayDateString, getLastWeekMonday, getDateRangeForWeek } from "../src/utils/date";
 
 const TASK_ID_PH = "producthunt_top10";
 const TASK_ID_HN = "hackernews_top30";
@@ -14,7 +14,18 @@ const TASK_ID_GH = "github_trending";
 const D1_DB = "trend-catcher-db";
 const NOW = Math.floor(Date.now() / 1000);
 const DATE = getTodayDateString();
-const SECRET = "change-me-to-a-random-string";
+
+// Read INTERNAL_SECRET from .dev.vars (local development secret)
+function getSecret(): string {
+  const devVarsPath = join(import.meta.dirname ?? __dirname, "..", ".dev.vars");
+  if (existsSync(devVarsPath)) {
+    const content = readFileSync(devVarsPath, "utf-8");
+    const match = content.match(/^INTERNAL_SECRET=(.+)$/m);
+    if (match) return match[1].trim();
+  }
+  return "change-me-to-a-random-string"; // fallback
+}
+const SECRET = getSecret();
 
 function wrangler(sql: string) {
   const file = join(tmpdir(), `it-test-${Date.now()}.sql`);
@@ -112,25 +123,96 @@ async function main() {
   console.log(`  ✅ ${taskCount} tasks written to D1\n`);
 
   // ── Phase 3: Trigger aggregation ───────────────
-  console.log("── Phase 3: Trigger aggregation ──");
+  console.log("── Phase 3: Trigger daily aggregation ──");
 
+  let dailyOk = false;
   try {
-    console.log("  Triggering AI agent loop (may take 30-60s)...");
-    execSync(
+    const result = execSync(
       `curl -s -X POST http://localhost:8787/internal/aggregate -H "Content-Type: application/json" -H "Authorization: Bearer ${SECRET}"`,
-      { stdio: "pipe" }
+      { encoding: "utf8", stdio: "pipe", timeout: 10_000 }
+    ).trim();
+    if (result.includes('"ok":true')) {
+      dailyOk = true;
+      console.log("  ✅ Daily aggregation started (will run in background)\n");
+    } else {
+      console.log(`  ⚠️  Daily aggregation response: ${result.slice(0, 200)}\n`);
+    }
+  } catch (err) {
+    console.log(`  ⚠️  Could not reach server: ${(err as Error).message}\n`);
+    console.log("  Make sure 'npm run dev' is running on port 8787.\n");
+  }
+
+  // ── Phase 5: Weekly aggregation ──────────────
+  console.log("\n── Phase 5: Weekly aggregation ──");
+
+  const weekMonday = getLastWeekMonday();
+  const weekDates = getDateRangeForWeek(weekMonday);
+  console.log(`  Week: ${weekMonday} → ${weekDates[6]} (${weekDates.length} days)`);
+
+  // 5a: Insert daily_summaries for all 7 days of the past week
+  console.log("  5a: Inserting daily_summaries for the week...");
+  wrangler(`DELETE FROM daily_summaries WHERE summary_date >= '${weekMonday}' AND summary_date <= '${weekDates[6]}';`);
+  wrangler(`DELETE FROM weekly_summaries WHERE week_start_date = '${weekMonday}';`);
+
+  for (const d of weekDates) {
+    const siteSummaries = JSON.stringify({
+      producthunt: { en: `- [AI] Product ${d}](https://example.com) — A trending product on ${d}`, zh: `- [AI] 产品${d}](https://example.com) — ${d}热门产品` },
+      hackernews: { en: `- [DevTools] HN Topic ${d}](https://example.com) — Discussion on ${d}`, zh: `- [DevTools] HN话题${d}](https://example.com) — ${d}讨论` },
+      github: { en: `- [Open Source] Repo ${d}](https://example.com) — Trending on ${d}`, zh: `- [Open Source] 仓库${d}](https://example.com) — ${d}趋势` },
+    });
+    const escapedSummaries = siteSummaries.replace(/'/g, "''");
+    const escapedEn = `## ${d} Report\\n\\nDaily trend report for ${d}.`.replace(/'/g, "''");
+    const escapedZh = `## ${d} 报告\\n\\n${d}的每日趋势报告。`.replace(/'/g, "''");
+    wrangler(
+      `INSERT OR REPLACE INTO daily_summaries (summary_date, full_report_en, full_report_zh, site_summaries, is_notified, created_at, updated_at) VALUES ('${d}', '${escapedEn}', '${escapedZh}', '${escapedSummaries}', 1, ${NOW}, ${NOW});`
     );
-    console.log("  ✅ Aggregation triggered!\n");
-  } catch {
-    console.log("  ⚠️  Could not reach server. Is 'npm run dev' running?");
+  }
+  console.log(`  ✅ ${weekDates.length} daily_summaries inserted`);
+
+  // 5b: Trigger weekly aggregation via internal API
+  console.log("  5b: Triggering weekly AI agent loop...");
+
+  let weeklyOk = false;
+  try {
+    const result = execSync(
+      `curl -s -X POST http://localhost:8787/internal/weekly-aggregate -H "Content-Type: application/json" -H "Authorization: Bearer ${SECRET}"`,
+      { encoding: "utf8", stdio: "pipe", timeout: 10_000 }
+    ).trim();
+    if (result.includes('"ok":true')) {
+      weeklyOk = true;
+      console.log("  ✅ Weekly aggregation started (will run in background)\n");
+    } else {
+      console.log(`  ⚠️  Weekly aggregation response: ${result.slice(0, 200)}\n`);
+    }
+  } catch (err) {
+    console.log(`  ⚠️  Could not reach server for weekly aggregation: ${(err as Error).message}`);
     console.log("  Run this manually:");
     console.log(
-      `    curl -s -X POST http://localhost:8787/internal/aggregate -H "Authorization: Bearer ${SECRET}"`
+      `    curl -s -X POST http://localhost:8787/internal/weekly-aggregate -H "Authorization: Bearer ${SECRET}"`
     );
+  }
+
+  // 5c: Verify weekly_summaries row exists
+  if (weeklyOk) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const result = execSync(
+        `curl -s http://localhost:8787/reports/weekly/${weekMonday}?lang=en`,
+        { encoding: "utf8", stdio: "pipe", timeout: 5000 }
+      );
+      if (result.includes("Weekly Trend Report") || result.includes("周报")) {
+        console.log("  ✅ Weekly report page loads successfully");
+      } else {
+        console.log("  ⚠️  Weekly report page may not have content yet");
+      }
+    } catch {
+      console.log("  ⚠️  Could not verify weekly report page");
+    }
   }
 
   // ── Phase 4: Docker smoke test ─────────────────
   console.log("\n── Phase 4: Container Docker test ──");
+  // ... Phase 4 begins ...
 
   let dockerAvailable = false;
   try {
@@ -184,7 +266,32 @@ async function main() {
       execSync(`docker rm -f ${cid}`, { stdio: "ignore" });
 
       if (curlResult.includes("HTTP:200") || curlResult.includes("HTTP:500")) {
-        console.log(`  [CT]  ✅ Endpoint responds: ${curlResult.split("\nHTTP:")[0]}`);
+        console.log(`  [CT]  ✅ Daily endpoint responds: ${curlResult.split("\nHTTP:")[0]}`);
+
+        // Test weekly endpoint
+        console.log("  [CT]  Testing weekly endpoint...");
+        const weeklyBody = JSON.stringify({
+          weekStartDate: weekMonday,
+          dailySummaries: weekDates.map((d) => ({
+            summary_date: d,
+            full_report_en: `## ${d} Report`,
+            full_report_zh: `## ${d} 报告`,
+            site_summaries: JSON.stringify({}),
+          })),
+          apiKey: "test",
+        });
+        const escapedWeeklyBody = weeklyBody.replace(/'/g, "'\\''");
+        const weeklyCurl = execSync(
+          `curl -s -w "\\nHTTP:%{http_code}" http://localhost:14002/aggregate-weekly -X POST -H "Content-Type: application/json" -d '${escapedWeeklyBody}'`,
+          { encoding: "utf8", timeout: 10_000 }
+        ).trim();
+
+        if (weeklyCurl.includes("HTTP:200") || weeklyCurl.includes("HTTP:400") || weeklyCurl.includes("HTTP:500")) {
+          console.log(`  [CT]  ✅ Weekly endpoint responds: ${weeklyCurl.split("\nHTTP:")[0]}`);
+        } else {
+          console.log(`  [CT]  ❌ Unexpected weekly response: ${weeklyCurl}`);
+        }
+
         console.log("  [CT]  ✅ Docker smoke test passed\n");
       } else {
         console.log(`  [CT]  ❌ Unexpected response: ${curlResult}`);
@@ -203,7 +310,8 @@ async function main() {
 
   console.log("");
   console.log("── Verify ──");
-  console.log("  Open:  http://localhost:8787");
+  console.log("  Daily report:  http://localhost:8787");
+  console.log("  Weekly report: http://localhost:8787/reports/weekly/" + weekMonday);
   console.log("  Check: your email for the report");
   console.log("");
   console.log("╔══════════════════════════════════════════════╗");
