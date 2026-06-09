@@ -203,18 +203,18 @@ export default {
   },
 
   async scheduled(
-    controller: ScheduledController,
+    _controller: ScheduledController,
     env: Bindings,
     _ctx: ExecutionContext
   ) {
     const { DB, SCRAPE_QUEUE } = env;
 
-    if (controller.cron === "0 4 * * 0") {
+    const count = await generateAndEnqueueTasks(DB, SCRAPE_QUEUE);
+    console.log(`Enqueued ${count} scrape tasks`);
+
+    if (new Date().getUTCDay() === 0) {
       await enqueueWeeklyTask(DB, SCRAPE_QUEUE);
-      console.log("Enqueued weekly task");
-    } else {
-      const count = await generateAndEnqueueTasks(DB, SCRAPE_QUEUE);
-      console.log(`Enqueued ${count} scrape tasks`);
+      console.log("Enqueued weekly task (Sunday)");
     }
   },
 };
