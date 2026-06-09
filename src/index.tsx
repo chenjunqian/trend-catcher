@@ -9,13 +9,14 @@ import type {
 import { Container } from "@cloudflare/containers";
 import Home from "./routes/home";
 import Report from "./routes/report";
-import { getRecentSummaries, getSummaryByDate } from "./db/client";
-import { generateAndEnqueueTasks } from "./tasks/generator";
+import { getRecentSummaries, getRecentWeeklySummaries, getSummaryByDate, getWeeklySummaryByDate } from "./db/client";
+import { generateAndEnqueueTasks, enqueueWeeklyTask } from "./tasks/generator";
 import { queueConsumer } from "./tasks/consumer";
 import { runAggregation } from "./aggregator/aggregate";
-import { triggerContainerAggregation } from "./aggregator/container";
-import { sendDailyEmail } from "./notifier/email";
-import { getTodayDateString } from "./utils/date";
+import { runWeeklyAggregation } from "./aggregator/weekly-aggregate";
+import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "./aggregator/container";
+import { sendDailyEmail, sendWeeklyEmail } from "./notifier/email";
+import { getTodayDateString, getLastWeekMonday } from "./utils/date";
 import { detectLang } from "./i18n";
 import type { TaskMessage } from "./tasks/generator";
 import { manifest } from "./pwa/manifest";
@@ -40,11 +41,30 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.get("/", async (c) => {
   const { DB } = c.env;
   const lang = detectLang(c.req.raw);
-  const result = await getRecentSummaries(DB, 30);
+  const dailyResult = await getRecentSummaries(DB, 30);
+  const weeklyResult = await getRecentWeeklySummaries(DB, 10);
 
   return c.html(
-    <Home summaries={result.results ?? []} lang={lang} path={c.req.path} />
+    <Home
+      dailySummaries={dailyResult.results ?? []}
+      weeklySummaries={weeklyResult.results ?? []}
+      lang={lang}
+      path={c.req.path}
+    />
   );
+});
+
+app.get("/reports/weekly/:date", async (c) => {
+  const { DB } = c.env;
+  const lang = detectLang(c.req.raw);
+  const date = c.req.param("date");
+  const summary = await getWeeklySummaryByDate(DB, date);
+
+  if (!summary) {
+    return c.notFound();
+  }
+
+  return c.html(<Report summary={summary} lang={lang} path={c.req.path} isWeekly={true} />);
 });
 
 app.get("/reports/:date", async (c) => {
@@ -73,31 +93,72 @@ app.post("/internal/aggregate", async (c) => {
     return c.json({ error: "DEEPSEEK_API_KEY not configured" }, 500);
   }
 
-  try {
-    const date = getTodayDateString();
+  const date = getTodayDateString();
 
-    if (AGGREGATOR_CONTAINER) {
-      console.log("Starting container aggregation for", date);
-      await triggerContainerAggregation(
-        DB,
-        AGGREGATOR_CONTAINER,
-        RESEND_API_KEY,
-        NOTIFICATION_EMAIL,
-        date,
-        DEEPSEEK_API_KEY
-      );
-      return c.json({ ok: true, message: "Aggregation completed via container" });
-    }
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        if (AGGREGATOR_CONTAINER) {
+          try {
+            console.log("Starting container aggregation for", date);
+            await triggerContainerAggregation(
+              DB, AGGREGATOR_CONTAINER, RESEND_API_KEY, NOTIFICATION_EMAIL, date, DEEPSEEK_API_KEY
+            );
+            return;
+          } catch (containerErr) {
+            console.warn("Container aggregation failed, falling back to Worker:", (containerErr as Error).message);
+          }
+        }
+        console.log("Starting direct aggregation for", date);
+        await runAggregation(DB, DEEPSEEK_API_KEY, date);
+        await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
+      } catch (err) {
+        console.error("Aggregation failed:", err);
+      }
+    })()
+  );
 
-    // Fallback: run aggregation directly in Worker
-    console.log("Starting direct aggregation for", date);
-    await runAggregation(DB, DEEPSEEK_API_KEY, date);
-    await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
-    return c.json({ ok: true, message: "Aggregation completed directly" });
-  } catch (err) {
-    console.error("Aggregation failed:", err);
-    return c.json({ error: (err as Error).message }, 500);
+  return c.json({ ok: true, message: "Aggregation started" });
+});
+
+app.post("/internal/weekly-aggregate", async (c) => {
+  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+
+  const auth = c.req.header("Authorization") || "";
+  if (auth !== `Bearer ${INTERNAL_SECRET}`) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
+
+  if (!DEEPSEEK_API_KEY) {
+    return c.json({ error: "DEEPSEEK_API_KEY not configured" }, 500);
+  }
+
+  const weekStartDate = getLastWeekMonday();
+
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        if (AGGREGATOR_CONTAINER) {
+          try {
+            console.log("Starting container weekly aggregation for", weekStartDate);
+            await triggerWeeklyContainerAggregation(
+              DB, AGGREGATOR_CONTAINER, RESEND_API_KEY, NOTIFICATION_EMAIL, weekStartDate, DEEPSEEK_API_KEY
+            );
+            return;
+          } catch (containerErr) {
+            console.warn("Container weekly aggregation failed, falling back to Worker:", (containerErr as Error).message);
+          }
+        }
+        console.log("Starting direct weekly aggregation for", weekStartDate);
+        await runWeeklyAggregation(DB, DEEPSEEK_API_KEY, weekStartDate);
+        await sendWeeklyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, weekStartDate);
+      } catch (err) {
+        console.error("Weekly aggregation failed:", err);
+      }
+    })()
+  );
+
+  return c.json({ ok: true, message: "Weekly aggregation started" });
 });
 
 // PWA routes
@@ -142,12 +203,18 @@ export default {
   },
 
   async scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: Bindings,
     _ctx: ExecutionContext
   ) {
     const { DB, SCRAPE_QUEUE } = env;
-    const count = await generateAndEnqueueTasks(DB, SCRAPE_QUEUE);
-    console.log(`Enqueued ${count} scrape tasks`);
+
+    if (controller.cron === "0 4 * * 0") {
+      await enqueueWeeklyTask(DB, SCRAPE_QUEUE);
+      console.log("Enqueued weekly task");
+    } else {
+      const count = await generateAndEnqueueTasks(DB, SCRAPE_QUEUE);
+      console.log(`Enqueued ${count} scrape tasks`);
+    }
   },
 };

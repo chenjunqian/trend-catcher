@@ -36,6 +36,47 @@ describe("t", () => {
   });
 });
 
+describe("t with template params", () => {
+  it("replaces {key} placeholders with values", () => {
+    expect(t("en", "report.week_label", { date: "2026-06-01" })).toContain("2026-06-01");
+    expect(t("zh", "report.week_label", { date: "2026-06-01" })).toContain("2026-06-01");
+  });
+
+  it("preserves unmatched placeholders", () => {
+    expect(t("en", "email.subject")).toContain("{date}");
+  });
+
+  it("does not break when no params provided", () => {
+    expect(t("en", "report.week_label")).toBeTruthy();
+  });
+
+  it("works with unknown key and params", () => {
+    expect(t("en", "nonexistent.key", { foo: "bar" })).toBe("nonexistent.key");
+  });
+});
+
+describe("weekly i18n keys", () => {
+  it("badge.weekly exists in both languages", () => {
+    expect(t("en", "badge.weekly")).toBe("Weekly");
+    expect(t("zh", "badge.weekly")).toBe("周报");
+  });
+
+  it("report.weekly_heading exists in both languages", () => {
+    expect(t("en", "report.weekly_heading")).toBe("Weekly Trend Report");
+    expect(t("zh", "report.weekly_heading")).toBe("每周趋势报告");
+  });
+
+  it("email.subject.weekly exists in both languages", () => {
+    expect(t("en", "email.subject.weekly")).toContain("Weekly");
+    expect(t("zh", "email.subject.weekly")).toContain("周报");
+  });
+
+  it("report.week_label exists in both languages", () => {
+    expect(t("en", "report.week_label")).toContain("{date}");
+    expect(t("zh", "report.week_label")).toContain("{date}");
+  });
+});
+
 describe("detectLang", () => {
   function makeRequest(url: string, acceptLang?: string): Request {
     const headers = new Headers();

@@ -23,6 +23,17 @@ export interface DailySummary {
   updated_at: number;
 }
 
+export interface WeeklySummary {
+  id: number;
+  week_start_date: string;
+  full_report_en: string;
+  full_report_zh: string;
+  site_summaries: string;
+  is_notified: number;
+  created_at: number;
+  updated_at: number;
+}
+
 export function createTask(
   db: D1Database,
   task: {
@@ -207,5 +218,89 @@ export function updateSummaryNotified(db: D1Database, date: string) {
       "UPDATE daily_summaries SET is_notified = 1, updated_at = ? WHERE summary_date = ?"
     )
     .bind(now, date)
+    .run();
+}
+
+export function upsertWeeklySummary(
+  db: D1Database,
+  summary: {
+    week_start_date: string;
+    full_report_en?: string;
+    full_report_zh?: string;
+    site_summaries?: string;
+    is_notified?: number;
+  }
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return db
+    .prepare(
+      `INSERT INTO weekly_summaries (week_start_date, full_report_en, full_report_zh, site_summaries, is_notified, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(week_start_date) DO UPDATE SET
+         full_report_en = COALESCE(?, full_report_en),
+         full_report_zh = COALESCE(?, full_report_zh),
+         site_summaries = COALESCE(?, site_summaries),
+         is_notified = COALESCE(?, is_notified),
+         updated_at = ?`
+    )
+    .bind(
+      summary.week_start_date,
+      summary.full_report_en ?? "",
+      summary.full_report_zh ?? "",
+      summary.site_summaries ?? "{}",
+      summary.is_notified ?? 0,
+      now,
+      now,
+      summary.full_report_en ?? null,
+      summary.full_report_zh ?? null,
+      summary.site_summaries ?? null,
+      summary.is_notified ?? null,
+      now
+    )
+    .run();
+}
+
+export function getWeeklySummaryByDate(
+  db: D1Database,
+  weekStartDate: string
+): Promise<WeeklySummary | null> {
+  return db
+    .prepare("SELECT * FROM weekly_summaries WHERE week_start_date = ?")
+    .bind(weekStartDate)
+    .first<WeeklySummary>();
+}
+
+export function getRecentWeeklySummaries(
+  db: D1Database,
+  limit: number = 10
+): Promise<D1Result<WeeklySummary>> {
+  return db
+    .prepare(
+      "SELECT id, week_start_date, full_report_en, full_report_zh, site_summaries, is_notified, created_at FROM weekly_summaries ORDER BY week_start_date DESC LIMIT ?"
+    )
+    .bind(limit)
+    .all();
+}
+
+export function getDailySummariesForWeek(
+  db: D1Database,
+  weekStartDate: string,
+  weekEndDate: string
+): Promise<D1Result<DailySummary>> {
+  return db
+    .prepare(
+      "SELECT * FROM daily_summaries WHERE summary_date >= ? AND summary_date <= ? ORDER BY summary_date ASC"
+    )
+    .bind(weekStartDate, weekEndDate)
+    .all();
+}
+
+export function updateWeeklySummaryNotified(db: D1Database, weekStartDate: string) {
+  const now = Math.floor(Date.now() / 1000);
+  return db
+    .prepare(
+      "UPDATE weekly_summaries SET is_notified = 1, updated_at = ? WHERE week_start_date = ?"
+    )
+    .bind(now, weekStartDate)
     .run();
 }
