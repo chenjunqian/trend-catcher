@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Trend Catcher** (猎趋) is an AI-powered daily trend aggregator for indie developers. It scrapes Product Hunt, Hacker News, and GitHub Trending every day, generates bilingual (EN/ZH) summaries via an LLM agent loop, and delivers them via email and a web dashboard.
+**Trend Catcher** (猎趋) is an AI-powered daily and weekly trend aggregator for indie developers. It scrapes Product Hunt, Hacker News, and GitHub Trending every day, generates bilingual (EN/ZH) summaries via an LLM agent loop, and delivers daily reports via email and a web dashboard. Every Sunday, it synthesizes the past week's daily reports into a weekly trend report.
 
 - **Runtime**: Cloudflare Workers
 - **Web framework**: Hono.js (JSX server-side rendering)
@@ -17,9 +17,12 @@
 
 ## Architecture
 
+### Daily Flow
+
 ```
 Cron Trigger (UTC 1:00)
   → generator.ts: creates scrape tasks in D1 + enqueues to scrape-queue
+  → On Sunday: also enqueues a weekly task via enqueueWeeklyTask()
       ↓
 Queue Consumer (concurrent, up to 5-min execution)
   → processors/*.ts: scrapes each website
@@ -40,9 +43,33 @@ Container HTTP Server (container/server.ts)
 Orchestrator saves to D1 + sends email
       ↓
 Web Dashboard (Hono JSX)
-  → GET /          : list of daily reports
-  → GET /reports/:date : detailed bilingual report
+  → GET /                     : list of daily + weekly reports
+  → GET /reports/:date        : detailed daily report
+  → GET /reports/weekly/:date : detailed weekly trend report
   → i18n: ?lang=en / ?lang=zh / Accept-Language header
+```
+
+### Weekly Flow (Sunday only)
+
+```
+Cron Trigger detects Sunday → enqueueWeeklyTask()
+  → scrape-queue receives a single type:"weekly" task
+      ↓
+Queue Consumer (weekly path)
+  → Waits for Sunday's daily scrape tasks to complete
+  → Marks weekly task as completed
+  → Triggers weekly aggregation (container or direct Worker)
+      ↓
+Container Orchestrator (triggerWeeklyContainerAggregation)
+  → Fetches all 7 daily summaries for the past week from D1
+  → POST /aggregate-weekly to container with { weekStartDate, dailySummaries, apiKey }
+      ↓
+Container HTTP Server (handleWeeklyAggregation)
+  → Creates in-memory weekly agent tools (receives pre-loaded daily summaries)
+  → Runs weekly agent loop: getDailySummaries → webSearch → saveSiteSummary → saveFinalReport
+  → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
+      ↓
+Orchestrator saves to weekly_summaries table + sends weekly email
 ```
 
 ## Key Design Notes
@@ -50,7 +77,9 @@ Web Dashboard (Hono JSX)
 - **DeepSeek cache optimization**: System prompt and first user message are completely static (no dates, no dynamic data). Only tool results contain dynamic content. This maximizes prefix cache hits and reduces API costs.
 - **Idempotency**: Queue consumer checks `status === 'pending'` before processing. Tasks use `INSERT OR IGNORE`.
 - **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation.
-- **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). It is shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.
+- **Weekly waits for daily completion**: The weekly task `msg.retry()`s until Sunday's daily scrape tasks finish, ensuring all 7 days of data exist before aggregation.
+- **Weekly as pure synthesis**: The weekly system does NOT scrape. It reads 7 pre-generated daily summaries and synthesizes them into a cross-week trend report.
+- **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). They are shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.
 - **Container retry logic**: Uses `container.fetch()` in a 6-attempt exponential backoff loop instead of `startAndWaitForPorts()` to work around a `@cloudflare/containers` race condition where `getTcpPort()` throws before the Firecracker VM reaches "running" state.
 
 ---
@@ -80,11 +109,11 @@ trend-catcher/
 ├── src/
 │   ├── index.tsx              # Hono app entry (routes, queue, cron, PWA, AggregatorContainer DO)
 │   ├── db/
-│   │   ├── schema.sql         # D1 table definitions
-│   │   └── client.ts          # D1 query helpers (CRUD)
+│   │   ├── schema.sql         # D1 table definitions (daily_summaries + weekly_summaries)
+│   │   └── client.ts          # D1 query helpers (CRUD for daily + weekly)
 │   ├── tasks/
-│   │   ├── generator.ts       # Cron handler: creates + enqueues tasks
-│   │   ├── consumer.ts        # Queue consumer: processes + triggers aggregation
+│   │   ├── generator.ts       # Cron handler: creates + enqueues tasks, also enqueueWeeklyTask() on Sunday
+│   │   ├── consumer.ts        # Queue consumer: processes + triggers daily/weekly aggregation
 │   │   └── processors/
 │   │       ├── producthunt.ts # Atom RSS feed parser (Cloudflare blocks HTML)
 │   │       ├── hackernews.ts  # Firebase API (free, no auth)
@@ -93,23 +122,27 @@ trend-catcher/
 │   │   ├── llm.ts             # DeepSeek provider setup
 │   │   ├── tools.ts           # Agent tools (createAgentTools for Worker, createInMemoryAgentTools for Container)
 │   │   ├── aggregate.ts       # Agent loop: runAgentLoop, runAggregation (shared, NO Workers-only imports)
-│   │   ├── container.ts       # Container orchestrator: triggerContainerAggregation (Workers-only imports OK)
+│   │   ├── weekly-aggregate.ts # Weekly agent loop: runWeeklyAgentLoop, runWeeklyAggregation
+│   │   ├── weekly-tools.ts    # Weekly agent tools (createWeeklyAgentTools, createInMemoryWeeklyAgentTools)
+│   │   ├── container.ts       # Container orchestrator: triggerContainerAggregation + triggerWeeklyContainerAggregation
 │   │   └── search.ts          # DuckDuckGo HTML search (shared)
 │   ├── container/
-│   │   └── server.ts          # Container Node.js HTTP server (imports from aggregator/, no Workers deps)
+│   │   └── server.ts          # Container Node.js HTTP server (handles /aggregate + /aggregate-weekly)
 │   ├── notifier/
-│   │   └── email.ts           # Resend email with bilingual report
+│   │   └── email.ts           # Resend email with bilingual report (daily + weekly)
 │   ├── routes/
 │   │   ├── layout.tsx         # Layout component (PWA meta, dark theme, lang switch)
-│   │   ├── home.tsx           # GET / — report list
-│   │   └── report.tsx         # GET /reports/:date — bilingual report detail
+│   │   ├── home.tsx           # GET / — report list (daily + weekly merged)
+│   │   └── report.tsx         # GET /reports/:date + /reports/weekly/:date — bilingual report detail
 │   ├── pwa/
 │   │   ├── manifest.ts        # PWA manifest JSON
 │   │   └── sw.ts              # Service worker (cache-first, offline fallback)
 │   ├── i18n/
-│   │   └── index.ts           # Translations, lang detection
+│   │   └── index.ts           # Translations, lang detection (incl. weekly keys)
+│   ├── test-utils/
+│   │   └── d1-mock.ts         # Shared D1 mock factory for tests
 │   └── utils/
-│       ├── date.ts            # Date formatting
+│       ├── date.ts            # Date formatting (incl. getLastWeekMonday, getDateRangeForWeek)
 │       └── fetcher.ts         # HTTP fetch with retry + timeout
 └── migrations/                # (future) D1 migration files
 ```
@@ -204,7 +237,9 @@ src/
 | `tasks/consumer.ts` | Integration | Workers pool, mock fetch calls |
 | `aggregator/tools.ts` | Unit | Mock D1, verify tool execute shapes |
 | `aggregator/aggregate.ts` | Unit | Mock `generateText`, verify prompts |
-| `aggregator/container.ts` | Unit | Mock `@cloudflare/containers`, verify retry logic |
+| `aggregator/weekly-aggregate.ts` | Unit | Mock `generateText`, verify weekly prompts |
+| `aggregator/weekly-tools.ts` | Unit | Mock D1, verify weekly tool shapes |
+| `aggregator/container.ts` | Unit | Mock `@cloudflare/containers`, verify retry logic (daily + weekly) |
 | `container/server.ts` | Integration | IT test Phase 0 (real Node.js import check), Phase 4 (Docker smoke test) |
 | `routes/*.tsx` | Integration | Workers pool, test HTTP responses |
 | `i18n/index.ts` | Unit | Pure functions, no mocking needed |
@@ -239,15 +274,19 @@ Every new function must have tests covering:
 - **Error cases** — network failures, malformed data, timeouts
 - **Boundary conditions** — max/min values, empty arrays, long strings
 
+### Commit Policy — Always Ask First
+
+**Never commit changes without explicit user confirmation.** For every request, you must ask the user whether to commit before running any git commit command — even if the user confirmed a commit in a previous request. Each request/session is independent.
+
 ### Before Committing
 
 ```bash
 npx tsc --noEmit && npx vitest run
 ```
 
-Both MUST pass. If either fails, fix before committing.
+Both MUST pass before asking the user to confirm a commit. If either fails, fix before asking.
 
-When changing files in the container's import chain (`aggregator/aggregate.ts`, `aggregator/tools.ts`, `aggregator/llm.ts`, `aggregator/search.ts`, `utils/fetcher.ts`), also run IT test Phase 0 to verify no Workers-only imports leaked:
+When changing files in the container's import chain (`aggregator/aggregate.ts`, `aggregator/weekly-aggregate.ts`, `aggregator/tools.ts`, `aggregator/weekly-tools.ts`, `aggregator/llm.ts`, `aggregator/search.ts`, `utils/fetcher.ts`), also run IT test Phase 0 to verify no Workers-only imports leaked:
 
 ```bash
 npm run it-test    # or at minimum, verify Phase 0 passes
@@ -334,7 +373,7 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 
 - **Cloudflare free tier**: Cron trigger must finish within 10ms CPU (only enqueue tasks, no I/O)
 - **Queue consumer**: Up to 5-minute execution window — scrapers + aggregation run here
-- **Container isolation**: `src/aggregator/aggregate.ts` must NOT import `@cloudflare/containers` or `cloudflare:workers` — these modules don't exist in Node.js. The container server crashes on import if this is violated.
+- **Container isolation**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import `@cloudflare/containers` or `cloudflare:workers` — these modules don't exist in Node.js. The container server crashes on import if this is violated.
 - **Container resources**: 0.0625 vCPU / 256 MiB — minimal; LLM tasks are network-I/O bound so this is sufficient.
 - **Container networking**: Private mode — Docker image must have all dependencies pre-installed (no runtime `npm install`/`npx` downloads).
 - **Cheerio in Workers**: Requires `nodejs_compat` compatibility flag
