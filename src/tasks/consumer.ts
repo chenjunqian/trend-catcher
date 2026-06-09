@@ -79,6 +79,20 @@ export async function queueConsumer(
 
   if (firstMsg.body.type === "weekly") {
     const weekStartDate = firstMsg.body.scheduled_date;
+
+    // Compute the Sunday of this week (6 days after Monday)
+    const mondayDate = new Date(weekStartDate + "T00:00:00Z");
+    const sundayDate = new Date(mondayDate);
+    sundayDate.setUTCDate(mondayDate.getUTCDate() + 6);
+    const sundayStr = sundayDate.toISOString().slice(0, 10);
+
+    // Wait until Sunday's daily scrape tasks are done
+    const sundayRemaining = await getPendingTaskCountForDate(env.DB, sundayStr);
+    if (sundayRemaining > 0) {
+      firstMsg.retry();
+      return;
+    }
+
     try {
       await processTask(env.DB, firstMsg.body);
       firstMsg.ack();
