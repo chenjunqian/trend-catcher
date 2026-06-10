@@ -161,6 +161,43 @@ app.post("/internal/weekly-aggregate", async (c) => {
   return c.json({ ok: true, message: "Weekly aggregation started" });
 });
 
+app.post("/internal/send-email", async (c) => {
+  const { DB, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+
+  const auth = c.req.header("Authorization") || "";
+  if (auth !== `Bearer ${INTERNAL_SECRET}`) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  let body: { date?: string; type?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { date, type } = body;
+
+  if (!date || !type) {
+    return c.json({ error: "date and type are required" }, 400);
+  }
+  if (type !== "daily" && type !== "weekly") {
+    return c.json({ error: "type must be 'daily' or 'weekly'" }, 400);
+  }
+
+  console.log(`[internal] Manual send-email requested: type=${type} date=${date}`);
+
+  const success = type === "daily"
+    ? await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date)
+    : await sendWeeklyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
+
+  if (!success) {
+    return c.json({ ok: false, error: "Email send failed — check logs for details" }, 500);
+  }
+
+  return c.json({ ok: true, message: `Email sent for ${type} ${date}` });
+});
+
 // PWA routes
 app.get("/manifest.json", (c) => {
   return c.json(manifest);
