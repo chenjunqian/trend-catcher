@@ -119,6 +119,52 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
             });
           })();`}
         </script>
+        <script>
+          {`(function(){
+            var btn=document.getElementById('load-more');
+            if(!btn)return;
+            var container=document.getElementById('items-container');
+            btn.addEventListener('click',async function(){
+              var cursor=this.dataset.cursor;
+              var lang=this.dataset.lang;
+              this.disabled=true;
+              this.textContent='...';
+              try{
+                var r=await fetch('/api/timeline?cursor='+encodeURIComponent(cursor)+'&lang='+encodeURIComponent(lang));
+                var d=await r.json();
+                if(!d.items||!d.items.length)return;
+                var html='';
+                for(var i=0;i<d.items.length;i++){
+                  var it=d.items[i];
+                  var href=it.type==='weekly'?'/reports/weekly/'+it.display_date+'?lang='+lang:'/reports/'+it.display_date+'?lang='+lang;
+                  var badge=it.type==='weekly'?(lang==='zh'?'周报':'Weekly'):(lang==='zh'?'日报':'Daily');
+                  var label=it.type==='weekly'?(lang==='zh'?it.display_date+' 所在周':'Week of '+it.display_date):it.display_date;
+                  var report=lang==='zh'?it.full_report_zh:it.full_report_en;
+                  html+='<a href="'+href+'" style="text-decoration:none;color:inherit;">'+
+                    '<div class="card">'+
+                      '<div style="display:flex;align-items:center;justify-content:space-between;">'+
+                        '<h3>'+label+'</h3>'+
+                        '<span class="badge">'+badge+'</span>'+
+                      '</div>'+
+                      '<p>'+report+'</p>'+
+                    '</div>'+
+                  '</a>';
+                }
+                container.insertAdjacentHTML('beforeend',html);
+                if(d.nextCursor){
+                  btn.dataset.cursor=d.nextCursor;
+                  btn.disabled=false;
+                  btn.textContent=lang==='zh'?'加载更多':'Load more';
+                }else{
+                  btn.remove();
+                }
+              }catch(e){
+                btn.disabled=false;
+                btn.textContent=lang==='zh'?'加载更多':'Load more';
+              }
+            });
+          })();`}
+        </script>
       </body>
     </html>
   );

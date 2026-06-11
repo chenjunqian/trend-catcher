@@ -90,20 +90,25 @@ describe("Home — paginated timeline", () => {
     expect(html).toContain("Saturday Report");
   });
 
-  it("shows load more link when nextCursor is provided", () => {
+  it("shows load more button when nextCursor is provided", () => {
     const html = render({ nextCursor: "500" });
-    expect(html).toContain("?cursor=500");
+    expect(html).toContain('id="load-more"');
+    expect(html).toContain('data-cursor="500"');
     expect(html).toContain("Load more");
   });
 
-  it("shows load more link in Chinese", () => {
+  it("shows load more button in Chinese", () => {
     const html = render({ nextCursor: "500", lang: "zh" });
     expect(html).toContain("加载更多");
   });
 
-  it("does not show load more link when nextCursor is null", () => {
+  it("does not show load more button when nextCursor is null", () => {
     const html = render({ nextCursor: null });
-    expect(html).not.toContain("Load more");
-    expect(html).not.toContain("加载更多");
+    expect(html).not.toContain('id="load-more"');
+  });
+
+  it("wraps items in container div for AJAX append", () => {
+    const html = render();
+    expect(html).toContain('id="items-container"');
   });
 });

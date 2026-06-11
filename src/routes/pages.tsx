@@ -15,10 +15,8 @@ const pages = new Hono<{ Bindings: Bindings }>();
 pages.get("/", async (c) => {
   const { DB } = c.env;
   const lang = detectLang(c.req.raw);
-  const cursorStr = c.req.query("cursor");
-  const cursor = cursorStr ? parseInt(cursorStr, 10) : undefined;
 
-  const result = await getHomeTimeline(DB, cursor, PAGE_SIZE);
+  const result = await getHomeTimeline(DB, undefined, PAGE_SIZE);
   const rows = result.results ?? [];
   const hasMore = rows.length > PAGE_SIZE;
   const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
