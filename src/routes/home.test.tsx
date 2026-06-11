@@ -1,37 +1,38 @@
 /** @jsxImportSource hono/jsx */
 import { describe, it, expect } from "vitest";
 import Home from "./home";
+import type { HomeTimelineItem } from "../db/client";
 
-describe("Home — mixed daily + weekly", () => {
-  const dailySummaries = [
+describe("Home — paginated timeline", () => {
+  const items: HomeTimelineItem[] = [
     {
-      summary_date: "2026-06-06",
+      type: "daily",
+      display_date: "2026-06-06",
       full_report_en: "## Saturday Report\nSome content here for Saturday",
       full_report_zh: "## 周六报告",
       created_at: 1000,
     },
     {
-      summary_date: "2026-06-05",
+      type: "weekly",
+      display_date: "2026-06-01",
+      full_report_en: "## Weekly Report\nWeekly overview content",
+      full_report_zh: "## 周报",
+      created_at: 750,
+    },
+    {
+      type: "daily",
+      display_date: "2026-06-05",
       full_report_en: "## Friday Report",
       full_report_zh: "## 周五报告",
       created_at: 500,
     },
   ];
 
-  const weeklySummaries = [
-    {
-      week_start_date: "2026-06-01",
-      full_report_en: "## Weekly Report\nWeekly overview content",
-      full_report_zh: "## 周报",
-      created_at: 750,
-    },
-  ];
-
   function render(props: Partial<Parameters<typeof Home>[0]> = {}) {
     const html = (
       <Home
-        dailySummaries={props.dailySummaries ?? dailySummaries}
-        weeklySummaries={props.weeklySummaries ?? weeklySummaries}
+        items={props.items ?? items}
+        nextCursor={props.nextCursor ?? null}
         lang={props.lang ?? "en"}
         path={props.path ?? "/"}
       />
@@ -64,9 +65,8 @@ describe("Home — mixed daily + weekly", () => {
     expect(html).toContain('href="/reports/2026-06-06');
   });
 
-  it("sorts items by created_at descending", () => {
+  it("renders items in the order provided (server-sorted)", () => {
     const html = render();
-    // 1000 (daily 06-06) > 750 (weekly 06-01) > 500 (daily 06-05)
     const idx0606 = html.indexOf("2026-06-06");
     const idx0601 = html.indexOf("2026-06-01");
     const idx0605 = html.indexOf("2026-06-05");
@@ -74,8 +74,8 @@ describe("Home — mixed daily + weekly", () => {
     expect(idx0601).toBeLessThan(idx0605);
   });
 
-  it("shows empty state when both arrays are empty", () => {
-    const html = render({ dailySummaries: [], weeklySummaries: [] });
+  it("shows empty state when items array is empty", () => {
+    const html = render({ items: [] });
     expect(html).toContain("No reports yet");
   });
 
@@ -87,7 +87,23 @@ describe("Home — mixed daily + weekly", () => {
 
   it("renders markdown preview stripped", () => {
     const html = render();
-    // stripMarkdownPreview removes ## headings and turns content to plain text
     expect(html).toContain("Saturday Report");
+  });
+
+  it("shows load more link when nextCursor is provided", () => {
+    const html = render({ nextCursor: "500" });
+    expect(html).toContain("?cursor=500");
+    expect(html).toContain("Load more");
+  });
+
+  it("shows load more link in Chinese", () => {
+    const html = render({ nextCursor: "500", lang: "zh" });
+    expect(html).toContain("加载更多");
+  });
+
+  it("does not show load more link when nextCursor is null", () => {
+    const html = render({ nextCursor: null });
+    expect(html).not.toContain("Load more");
+    expect(html).not.toContain("加载更多");
   });
 });
