@@ -61,29 +61,6 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
         `}</style>
         <script src="/register-sw.js" />
         <script src="/pull-to-refresh.js" />
-        <script>
-          {`(function(){
-            var f=document.getElementById('nl-form');
-            var m=document.getElementById('nl-msg');
-            f.addEventListener('submit',async function(e){
-              e.preventDefault();
-              var email=document.getElementById('nl-email').value.trim();
-              if(!email)return;
-              m.style.color='#999';
-              m.textContent='...';
-              try{
-                var r=await fetch('/api/subscribe',{
-                  method:'POST',
-                  headers:{'Content-Type':'application/json'},
-                  body:JSON.stringify({email:email,lang:document.documentElement.lang==='zh-CN'?'zh':'en'})
-                });
-                var d=await r.json();
-                if(r.ok){m.style.color='#333';m.textContent=d.message;}
-                else{m.style.color='#f78166';m.textContent=d.error;}
-              }catch(e){m.style.color='#f78166';m.textContent='Network error';}
-            });
-          })();`}
-        </script>
       </head>
       <body>
         <header>
@@ -119,6 +96,29 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
           &copy; {new Date().getFullYear()} Trend Catcher —{" "}
           {t(lang, "footer")}
         </footer>
+        <script>
+          {`(function(){
+            var f=document.getElementById('nl-form');
+            var m=document.getElementById('nl-msg');
+            f.addEventListener('submit',async function(e){
+              e.preventDefault();
+              var email=document.getElementById('nl-email').value.trim();
+              if(!email)return;
+              m.style.color='#999';
+              m.textContent='...';
+              try{
+                var r=await fetch('/api/subscribe',{
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body:JSON.stringify({email:email,lang:document.documentElement.lang==='zh-CN'?'zh':'en'})
+                });
+                var d=await r.json();
+                if(r.ok){m.style.color='#333';m.textContent=d.message;}
+                else{m.style.color='#f78166';m.textContent=d.error;}
+              }catch(e){m.style.color='#f78166';m.textContent='Network error';}
+            });
+          })();`}
+        </script>
       </body>
     </html>
   );
