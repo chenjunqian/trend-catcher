@@ -10,7 +10,7 @@
 - **Queue**: Cloudflare Queues
 - **Cron**: Daily at UTC 1:00 AM
 - **LLM**: DeepSeek (via `@ai-sdk/openai` → `api.deepseek.com/v1`)
-- **Email**: Resend
+- **Email**: Cloudflare Email Send (`[[send_email]]` binding, no API key needed)
 - **Language**: TypeScript (strict mode), all code and configuration in English
 
 ---
@@ -40,10 +40,11 @@ Container HTTP Server (container/server.ts)
   → Runs LLM agent loop: getRawDataByWebsite → webSearch → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
-Orchestrator saves to D1 + sends email
+Orchestrator saves to D1 + performs post-aggregation validation (fillMissingSiteSummary)
+      + sends email to all confirmed subscribers via Cloudflare Email Send
       ↓
 Web Dashboard (Hono JSX)
-  → GET /                     : list of daily + weekly reports
+  → GET /                     : list of daily + weekly reports (cursor pagination)
   → GET /reports/:date        : detailed daily report
   → GET /reports/weekly/:date : detailed weekly trend report
   → i18n: ?lang=en / ?lang=zh / Accept-Language header
@@ -69,18 +70,34 @@ Container HTTP Server (handleWeeklyAggregation)
   → Runs weekly agent loop: getDailySummaries → webSearch → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
-Orchestrator saves to weekly_summaries table + sends weekly email
+Orchestrator saves to weekly_summaries table + sends weekly email to subscribers
 ```
+
+---
+
+## Route Structure
+
+Routes are split into two Hono sub-apps mounted in `src/index.tsx`:
+
+- `src/routes/pages.tsx` — Page routes: `GET /`, `/reports/:date`, `/reports/weekly/:date`, `/api/confirm`, `/unsubscribe`, `/manifest.json`, `/offline`
+- `src/routes/api.ts` — API routes: `POST /api/subscribe`, `POST /internal/*`, `POST /internal/send-email`
+
+---
 
 ## Key Design Notes
 
 - **DeepSeek cache optimization**: System prompt and first user message are completely static (no dates, no dynamic data). Only tool results contain dynamic content. This maximizes prefix cache hits and reduces API costs.
 - **Idempotency**: Queue consumer checks `status === 'pending'` before processing. Tasks use `INSERT OR IGNORE`.
 - **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation.
+- **Post-aggregation validation**: After daily aggregation, `fillMissingSiteSummary()` checks all 3 sites have summaries. Missing ones are regenerated individually.
 - **Weekly waits for daily completion**: The weekly task `msg.retry()`s until Sunday's daily scrape tasks finish, ensuring all 7 days of data exist before aggregation.
 - **Weekly as pure synthesis**: The weekly system does NOT scrape. It reads 7 pre-generated daily summaries and synthesizes them into a cross-week trend report.
 - **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). They are shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.
 - **Container retry logic**: Uses `container.fetch()` in a 6-attempt exponential backoff loop instead of `startAndWaitForPorts()` to work around a `@cloudflare/containers` race condition where `getTcpPort()` throws before the Firecracker VM reaches "running" state.
+- **Email sender abstraction**: `email.ts` defines an `EmailSender` interface. The Worker provides a Cloudflare Email Send implementation; the interface could be swapped for other providers.
+- **Newsletter with double opt-in**: Subscribers table with `is_confirmed` flag. A confirmation email is sent on subscribe; users click a link to confirm. Unsubscribe uses a unique per-subscriber token.
+- **Cursor pagination**: Homepage timeline uses cursor-based pagination (`created_at` timestamp, 20 items per page) for efficient infinite scroll.
+- **Light theme**: UI uses a light color scheme (white background, black text, gray borders, `theme-color: #ffffff`).
 
 ---
 
@@ -88,63 +105,75 @@ Orchestrator saves to weekly_summaries table + sends weekly email
 
 ```
 trend-catcher/
-├── wrangler.toml              # CF Workers config (D1, Queue, Cron, Assets, Containers)
-├── Dockerfile                 # Container image (Node.js 22 Alpine, tsx runtime)
+├── wrangler.toml              # CF Workers config (D1, Queue, Cron, Containers, Email Send, Observability)
+├── Dockerfile                 # Container image (Node.js 22 Alpine, tsx runtime, port 4000)
 ├── package.json
 ├── tsconfig.json
+├── vitest.config.ts           # Vitest config (globals: true, environment: node)
 ├── .dev.vars                  # Local env vars (gitignored)
-├── .env.example               # Env var template
+├── .env.example               # Env var template (DEEPSEEK_API_KEY + INTERNAL_SECRET)
 ├── AGENTS.md                  # This file
-├── public/                    # Static assets (icons, manifest)
+├── public/                    # Static assets (icons, manifest, SW, JS)
 │   ├── favicon.ico
 │   ├── favicon-16x16.png
 │   ├── favicon-32x32.png
 │   ├── apple-touch-icon.png
 │   ├── android-chrome-192x192.png
-│   └── android-chrome-512x512.png
+│   ├── android-chrome-512x512.png
+│   ├── site.webmanifest       # Static PWA manifest
+│   ├── sw.js                  # Service worker (cache-first, offline fallback)
+│   ├── register-sw.js         # SW registration script
+│   └── pull-to-refresh.js     # Mobile pull-to-refresh gesture
 ├── scripts/
 │   ├── test-scrapers.ts       # Manual scraper test runner
-│   ├── it-test.ts             # Full integration test (Phase 0: module check → Phase 4: Docker smoke)
+│   ├── it-test.ts             # Full integration test (Phase 0→1→2→3→5→4)
 │   └── proxy.ts               # Auto-detect https_proxy for local dev
-├── src/
-│   ├── index.tsx              # Hono app entry (routes, queue, cron, PWA, AggregatorContainer DO)
-│   ├── db/
-│   │   ├── schema.sql         # D1 table definitions (daily_summaries + weekly_summaries)
-│   │   └── client.ts          # D1 query helpers (CRUD for daily + weekly)
-│   ├── tasks/
-│   │   ├── generator.ts       # Cron handler: creates + enqueues tasks, also enqueueWeeklyTask() on Sunday
-│   │   ├── consumer.ts        # Queue consumer: processes + triggers daily/weekly aggregation
-│   │   └── processors/
-│   │       ├── producthunt.ts # Atom RSS feed parser (Cloudflare blocks HTML)
-│   │       ├── hackernews.ts  # Firebase API (free, no auth)
-│   │       └── github.ts      # cheerio HTML scraper
-│   ├── aggregator/
-│   │   ├── llm.ts             # DeepSeek provider setup
-│   │   ├── tools.ts           # Agent tools (createAgentTools for Worker, createInMemoryAgentTools for Container)
-│   │   ├── aggregate.ts       # Agent loop: runAgentLoop, runAggregation (shared, NO Workers-only imports)
-│   │   ├── weekly-aggregate.ts # Weekly agent loop: runWeeklyAgentLoop, runWeeklyAggregation
-│   │   ├── weekly-tools.ts    # Weekly agent tools (createWeeklyAgentTools, createInMemoryWeeklyAgentTools)
-│   │   ├── container.ts       # Container orchestrator: triggerContainerAggregation + triggerWeeklyContainerAggregation
-│   │   └── search.ts          # DuckDuckGo HTML search (shared)
-│   ├── container/
-│   │   └── server.ts          # Container Node.js HTTP server (handles /aggregate + /aggregate-weekly)
-│   ├── notifier/
-│   │   └── email.ts           # Resend email with bilingual report (daily + weekly)
-│   ├── routes/
-│   │   ├── layout.tsx         # Layout component (PWA meta, dark theme, lang switch)
-│   │   ├── home.tsx           # GET / — report list (daily + weekly merged)
-│   │   └── report.tsx         # GET /reports/:date + /reports/weekly/:date — bilingual report detail
-│   ├── pwa/
-│   │   ├── manifest.ts        # PWA manifest JSON
-│   │   └── sw.ts              # Service worker (cache-first, offline fallback)
-│   ├── i18n/
-│   │   └── index.ts           # Translations, lang detection (incl. weekly keys)
-│   ├── test-utils/
-│   │   └── d1-mock.ts         # Shared D1 mock factory for tests
-│   └── utils/
-│       ├── date.ts            # Date formatting (incl. getLastWeekMonday, getDateRangeForWeek)
-│       └── fetcher.ts         # HTTP fetch with retry + timeout
-└── migrations/                # (future) D1 migration files
+└── src/
+    ├── index.tsx              # Hono app entry (routes mount, queue handler, cron handler, AggregatorContainer DO)
+    ├── db/
+    │   ├── schema.sql         # D1 tables (scrape_tasks, daily_summaries, weekly_summaries, newsletter_subscribers)
+    │   └── client.ts          # D1 query helpers (CRUD + getHomeTimeline + subscribe/confirm/unsubscribe)
+    ├── tasks/
+    │   ├── generator.ts       # Cron handler: creates + enqueues tasks, also enqueueWeeklyTask() on Sunday
+    │   ├── consumer.ts        # Queue consumer: processes + triggers daily/weekly aggregation
+    │   └── processors/
+    │       ├── producthunt.ts # Atom RSS feed parser (Cloudflare blocks HTML)
+    │       ├── hackernews.ts  # Firebase API (free, no auth)
+    │       └── github.ts      # cheerio HTML scraper
+    ├── aggregator/
+    │   ├── llm.ts             # DeepSeek provider setup
+    │   ├── tools.ts           # Agent tools (createAgentTools for Worker, createInMemoryAgentTools for Container)
+    │   ├── aggregate.ts       # Agent loop: runAggregation + fillMissingSiteSummary (shared, NO Workers-only imports)
+    │   ├── weekly-aggregate.ts # Weekly agent loop: runWeeklyAgentLoop, runWeeklyAggregation
+    │   ├── weekly-tools.ts    # Weekly agent tools (createWeeklyAgentTools, createInMemoryWeeklyAgentTools)
+    │   ├── container.ts       # Container orchestrator: triggerContainerAggregation + triggerWeeklyContainerAggregation
+    │   └── search.ts          # DuckDuckGo HTML search (shared)
+    ├── container/
+    │   └── server.ts          # Container Node.js HTTP server (handles /aggregate + /aggregate-weekly)
+    ├── notifier/
+    │   ├── email.ts           # EmailSender interface + sendDailyEmail/sendWeeklyEmail via Cloudflare Email Send
+    │   └── template.ts        # Shared email HTML builder (buildEmailHtml + markdownToHtml)
+    ├── routes/
+    │   ├── pages.tsx          # Page routes: /, /reports/:date, /reports/weekly/:date, /confirm, /unsubscribe, /manifest.json, /offline
+    │   ├── api.ts             # API routes: /api/subscribe, /internal/*, /internal/send-email
+    │   ├── layout.tsx         # Layout component (light theme, newsletter form, pull-to-refresh, lang switch)
+    │   ├── home.tsx           # GET / — report list with cursor pagination (20 per page, load more)
+    │   ├── report.tsx         # GET /reports/:date + /reports/weekly/:date — bilingual report detail
+    │   ├── markdown.ts        # Client-side Markdown → HTML renderer
+    │   └── newsletter.tsx     # Confirm / Unsubscribe / UnsubscribeSuccess / NotFound pages
+    ├── pwa/
+    │   ├── manifest.ts        # /manifest.json endpoint (dynamic)
+    │   ├── manifest.test.ts   # Manifest tests
+    │   └── sw.test.ts         # Service worker tests (tests public/sw.js)
+    ├── i18n/
+    │   ├── index.ts           # Translations, lang detection (newsletter + weekly + site keys)
+    │   └── index.test.ts      # i18n tests
+    ├── test-utils/
+    │   └── d1-mock.ts         # Shared D1 mock factory for tests
+    └── utils/
+        ├── date.ts            # Date formatting (getTodayDateString, getLastWeekMonday, getDateRangeForWeek)
+        ├── date.test.ts       # Date utility tests
+        └── fetcher.ts         # HTTP fetch with retry + timeout
 ```
 
 ---
@@ -161,12 +190,20 @@ npx tsc --noEmit
 # Test scrapers manually
 npm run test:scrapers
 
+# Run all tests
+npm run test                   # Single run (vitest run)
+npm run test:watch             # Watch mode (vitest)
+
 # Full integration test (Phase 0: container module check → Phase 4: Docker smoke test)
+# Note: phases run as 0→1→2→3→5→4 (weekly aggregate before Docker smoke)
 npm run it-test
 
 # Local D1 operations
 npm run db:migrate:local       # Run schema.sql on local D1
 npx wrangler d1 execute trend-catcher-db --local --command="SELECT ..."
+
+# Enable email sending (one-time)
+npx wrangler email sending enable guoshaotech.com
 
 # Deploy
 npm run deploy
@@ -201,28 +238,33 @@ npx vitest run                # Single run
 npx vitest run --coverage     # With coverage
 ```
 
-### Test File Convention
+### Test Files (16 total)
 
 ```
 src/
 ├── tasks/
 │   ├── processors/
-│   │   ├── producthunt.ts
-│   │   ├── producthunt.test.ts      # <— alongside source
-│   │   ├── hackernews.ts
+│   │   ├── producthunt.test.ts
 │   │   ├── hackernews.test.ts
-│   │   ├── github.ts
 │   │   └── github.test.ts
-│   ├── generator.ts
 │   ├── generator.test.ts
-│   ├── consumer.ts
 │   └── consumer.test.ts
 ├── aggregator/
-│   ├── aggregate.ts
-│   └── aggregate.test.ts
-│   ├── tools.ts
-│   └── tools.test.ts
-...
+│   ├── aggregate.test.ts
+│   ├── tools.test.ts
+│   ├── weekly-aggregate.test.ts
+│   ├── weekly-tools.test.ts
+│   └── container.test.ts
+├── routes/
+│   ├── home.test.tsx
+│   └── report.test.tsx
+├── pwa/
+│   ├── manifest.test.ts
+│   └── sw.test.ts
+├── i18n/
+│   └── index.test.ts
+└── utils/
+    └── date.test.ts
 ```
 
 ### What to Test
@@ -241,9 +283,11 @@ src/
 | `aggregator/weekly-tools.ts` | Unit | Mock D1, verify weekly tool shapes |
 | `aggregator/container.ts` | Unit | Mock `@cloudflare/containers`, verify retry logic (daily + weekly) |
 | `container/server.ts` | Integration | IT test Phase 0 (real Node.js import check), Phase 4 (Docker smoke test) |
-| `routes/*.tsx` | Integration | Workers pool, test HTTP responses |
+| `routes/home.tsx` | Integration | Workers pool, test HTTP + cursor pagination |
+| `routes/report.tsx` | Integration | Workers pool, test HTTP report rendering |
 | `i18n/index.ts` | Unit | Pure functions, no mocking needed |
-| `pwa/*.ts` | Unit | Verify manifest shape, SW content |
+| `pwa/manifest.ts` | Unit | Verify manifest shape |
+| `pwa/sw.test.ts` | Unit | Read public/sw.js, verify caching logic |
 
 ### Example Test
 
@@ -334,6 +378,7 @@ npm run it-test    # or at minimum, verify Phase 0 passes
 - API keys: set via `npx wrangler secret put` (production) or `.dev.vars` (local)
 - Non-secret config: in `wrangler.toml` `[vars]`
 - Always provide fallback or explicit check for missing env vars
+- Email uses `[[send_email]]` binding (no API key needed): configure via `npx wrangler email sending enable <domain>`
 
 ### No Comments Rule
 - **Do not add comments** unless explicitly asked
@@ -357,14 +402,18 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 - `detectLang(request)`: `?lang=` param > `Accept-Language` header > default `en`
 - All UI strings use `t(lang, key)`. Add new keys to both languages.
 - LLM generates bilingual content encoded in tools: `saveSiteSummary(website, summaryEn, summaryZh)`, `saveFinalReport(reportEn, reportZh)`
+- Newsletter keys: `newsletter.*` (subscribe form, confirmation, unsubscribe pages)
 
 ---
 
 ## PWA
 
 - `public/` served as static assets via `[assets]` config
-- Service worker at `/sw.js` (cache-first, offline fallback to `/offline`)
-- Manifest at `/manifest.json` (dynamically generated for proper name/description)
+- Service worker at `public/sw.js` (cache-first, offline fallback to `/offline`)
+- Registration via `public/register-sw.js`
+- Manifest at `/manifest.json` (dynamically generated from `src/pwa/manifest.ts`)
+- Static `public/site.webmanifest` as fallback
+- Mobile: `public/pull-to-refresh.js` for pull-to-refresh gesture
 - Icons: 192x192, 512x512 PNG + favicon.ico + apple-touch-icon
 
 ---
@@ -376,6 +425,7 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 - **Container isolation**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import `@cloudflare/containers` or `cloudflare:workers` — these modules don't exist in Node.js. The container server crashes on import if this is violated.
 - **Container resources**: 0.0625 vCPU / 256 MiB — minimal; LLM tasks are network-I/O bound so this is sufficient.
 - **Container networking**: Private mode — Docker image must have all dependencies pre-installed (no runtime `npm install`/`npx` downloads).
+- **Container port**: 4000 (set via `defaultPort = 4000` on AggregatorContainer DO class).
 - **Cheerio in Workers**: Requires `nodejs_compat` compatibility flag
 - **Product Hunt**: Homepage HTML is Cloudflare-protected. Use Atom RSS feed at `/feed` instead
 - **Hacker News**: Use official Firebase API (free, no auth, rate-limited at ~10k/hour)
