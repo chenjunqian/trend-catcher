@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { MessageBatch } from "@cloudflare/workers-types";
+import type { MessageBatch, SendEmail } from "@cloudflare/workers-types";
 import { queueConsumer, type Env } from "./consumer";
 import type { TaskMessage } from "./generator";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
@@ -49,12 +49,17 @@ function mockCtx(): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
+function mockEmail(): SendEmail {
+  return {
+    send: vi.fn().mockResolvedValue({ messageId: "mock-id" }),
+  } as unknown as SendEmail;
+}
+
 function mockEnv(): Env {
   return {
     DB: mockD1() as unknown as D1Database,
     DEEPSEEK_API_KEY: "sk-test",
-    RESEND_API_KEY: "re-test",
-    NOTIFICATION_EMAIL: "test@example.com",
+    EMAIL: mockEmail(),
   };
 }
 
@@ -78,8 +83,7 @@ describe("queueConsumer — weekly messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
     };
 
     const ctx = mockCtx();
@@ -107,8 +111,7 @@ describe("queueConsumer — weekly messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
     };
 
     const batch = makeBatch([makeMsg(weeklyMsg)]);
@@ -133,8 +136,7 @@ describe("queueConsumer — weekly messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
       AGGREGATOR_CONTAINER: undefined,
     };
 
@@ -166,8 +168,7 @@ describe("queueConsumer — weekly messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
     };
 
     const msg = makeMsg(weeklyMsg);
@@ -184,8 +185,7 @@ describe("queueConsumer — weekly messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
     };
 
     const batch = makeBatch([]);
@@ -212,8 +212,7 @@ describe("queueConsumer — daily messages", () => {
     const env: Env = {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
-      RESEND_API_KEY: "re-test",
-      NOTIFICATION_EMAIL: "test@example.com",
+      EMAIL: mockEmail(),
     };
 
     const batch = makeBatch([makeMsg(dailyMsg)]);

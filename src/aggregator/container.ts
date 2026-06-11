@@ -7,12 +7,12 @@ import {
   upsertWeeklySummary,
 } from "../db/client";
 import { getDateRangeForWeek } from "../utils/date";
+import type { EmailSender } from "../notifier/email";
 
 export async function triggerContainerAggregation(
   db: D1Database,
   containerBinding: unknown,
-  resendApiKey: string,
-  notificationEmail: string,
+  emailSender: EmailSender,
   date: string,
   deepseekApiKey: string
 ) {
@@ -90,8 +90,9 @@ export async function triggerContainerAggregation(
 
   console.log("[container-orch] Saved to D1, sending email");
 
+  const baseUrl = "https://trendcatcher.guoshaotech.com";
   const { sendDailyEmail } = await import("../notifier/email");
-  await sendDailyEmail(db, resendApiKey, notificationEmail, date);
+  await sendDailyEmail(db, emailSender, date, baseUrl);
 
   console.log("[container-orch] Email sent");
 }
@@ -99,8 +100,7 @@ export async function triggerContainerAggregation(
 export async function triggerWeeklyContainerAggregation(
   db: D1Database,
   containerBinding: unknown,
-  resendApiKey: string,
-  notificationEmail: string,
+  emailSender: EmailSender,
   weekStartDate: string,
   deepseekApiKey: string
 ) {
@@ -176,8 +176,9 @@ export async function triggerWeeklyContainerAggregation(
 
   console.log("[container-orch:weekly] Saved to D1, sending email");
 
+  const baseUrl = "https://trendcatcher.guoshaotech.com";
   const { sendWeeklyEmail } = await import("../notifier/email");
-  await sendWeeklyEmail(db, resendApiKey, notificationEmail, weekStartDate);
+  await sendWeeklyEmail(db, emailSender, weekStartDate, baseUrl);
 
   console.log("[container-orch:weekly] Email sent");
 }

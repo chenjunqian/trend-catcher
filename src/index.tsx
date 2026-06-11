@@ -5,11 +5,14 @@ import type {
   ScheduledController,
   MessageBatch,
   DurableObjectNamespace,
+  SendEmail,
 } from "@cloudflare/workers-types";
 import { Container } from "@cloudflare/containers";
 import Home from "./routes/home";
 import Report from "./routes/report";
+import { ConfirmPage, UnsubscribePage, UnsubscribeSuccessPage, NotFoundPage } from "./routes/newsletter";
 import { getRecentSummaries, getRecentWeeklySummaries, getSummaryByDate, getWeeklySummaryByDate } from "./db/client";
+import { subscribeEmail, confirmSubscription, unsubscribeByToken, getSubscriberByToken } from "./db/client";
 import { generateAndEnqueueTasks, enqueueWeeklyTask } from "./tasks/generator";
 import { queueConsumer } from "./tasks/consumer";
 import { runAggregation } from "./aggregator/aggregate";
@@ -17,7 +20,7 @@ import { runWeeklyAggregation } from "./aggregator/weekly-aggregate";
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "./aggregator/container";
 import { sendDailyEmail, sendWeeklyEmail } from "./notifier/email";
 import { getTodayDateString, getLastWeekMonday } from "./utils/date";
-import { detectLang } from "./i18n";
+import { detectLang, t } from "./i18n";
 import type { TaskMessage } from "./tasks/generator";
 import { manifest } from "./pwa/manifest";
 
@@ -26,13 +29,14 @@ export class AggregatorContainer extends Container {
   sleepAfter = "20s";
 }
 
+const BASE_URL = "https://trendcatcher.guoshaotech.com";
+
 type Bindings = {
   DB: D1Database;
   SCRAPE_QUEUE: Queue<TaskMessage>;
   AGGREGATOR_CONTAINER: DurableObjectNamespace;
   DEEPSEEK_API_KEY: string;
-  RESEND_API_KEY: string;
-  NOTIFICATION_EMAIL: string;
+  EMAIL: SendEmail;
   INTERNAL_SECRET: string;
 };
 
@@ -80,9 +84,111 @@ app.get("/reports/:date", async (c) => {
   return c.html(<Report summary={summary} lang={lang} path={c.req.path} />);
 });
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+app.post("/api/subscribe", async (c) => {
+  const { DB, EMAIL } = c.env;
+  const lang = detectLang(c.req.raw);
+
+  let body: { email?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: t(lang, "newsletter.invalid_email") }, 400);
+  }
+
+  const email = (body.email ?? "").trim().toLowerCase();
+  if (!email || !isValidEmail(email)) {
+    return c.json({ error: t(lang, "newsletter.invalid_email") }, 400);
+  }
+
+  const token = crypto.randomUUID();
+
+  try {
+    await subscribeEmail(DB, email, lang, token);
+
+    const confirmUrl = `${BASE_URL}/api/confirm?token=${encodeURIComponent(token)}&lang=${lang}`;
+    await EMAIL.send({
+      to: email,
+      from: { email: "trendcatcher@guoshaotech.com", name: "Trend Catcher" },
+      subject: t(lang, "email.confirm_subject"),
+      html: `<p>${lang === "zh" ? "请点击以下链接确认订阅猎趋：" : "Please click the link below to confirm your subscription:"}</p><p><a href="${confirmUrl}">${confirmUrl}</a></p>`,
+      text: `${lang === "zh" ? "请点击以下链接确认订阅猎趋：" : "Please click the link below to confirm your subscription:"} ${confirmUrl}`,
+    });
+  } catch (err) {
+    const e = err as Error;
+    console.error("[subscribe] Failed:", e.message);
+    return c.json({ error: t(lang, "newsletter.already_exists") }, 409);
+  }
+
+  return c.json({ ok: true, message: t(lang, "newsletter.sub_success") });
+});
+
+app.get("/api/confirm", async (c) => {
+  const { DB } = c.env;
+  const lang = detectLang(c.req.raw);
+
+  const token = c.req.query("token") ?? "";
+  if (!token) {
+    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+  }
+
+  const result = await confirmSubscription(DB, token);
+  if (!result.meta.changes) {
+    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+  }
+
+  return c.html(<ConfirmPage lang={lang} path={c.req.path} />);
+});
+
+app.get("/unsubscribe", async (c) => {
+  const { DB } = c.env;
+  const lang = detectLang(c.req.raw);
+
+  const token = c.req.query("token") ?? "";
+  if (!token) {
+    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+  }
+
+  const subscriber = await getSubscriberByToken(DB, token);
+  if (!subscriber) {
+    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+  }
+
+  return c.html(<UnsubscribePage lang={lang} path={c.req.path} token={token} />);
+});
+
+app.post("/api/unsubscribe", async (c) => {
+  const { DB } = c.env;
+  const lang = detectLang(c.req.raw);
+
+  let body: { token?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    try {
+      const formData = await c.req.formData();
+      body = { token: formData.get("token")?.toString() ?? "" };
+    } catch {
+      return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    }
+  }
+
+  const token = body.token ?? "";
+  if (!token) {
+    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+  }
+
+  await unsubscribeByToken(DB, token);
+
+  return c.html(<UnsubscribeSuccessPage lang={lang} path={c.req.path} />);
+});
+
 // Internal endpoint: manually trigger aggregation + email
 app.post("/internal/aggregate", async (c) => {
-  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, EMAIL, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
@@ -102,7 +208,7 @@ app.post("/internal/aggregate", async (c) => {
           try {
             console.log("Starting container aggregation for", date);
             await triggerContainerAggregation(
-              DB, AGGREGATOR_CONTAINER, RESEND_API_KEY, NOTIFICATION_EMAIL, date, DEEPSEEK_API_KEY
+              DB, AGGREGATOR_CONTAINER, EMAIL, date, DEEPSEEK_API_KEY
             );
             return;
           } catch (containerErr) {
@@ -111,7 +217,7 @@ app.post("/internal/aggregate", async (c) => {
         }
         console.log("Starting direct aggregation for", date);
         await runAggregation(DB, DEEPSEEK_API_KEY, date);
-        await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
+        await sendDailyEmail(DB, EMAIL, date, BASE_URL);
       } catch (err) {
         console.error("Aggregation failed:", err);
       }
@@ -122,7 +228,7 @@ app.post("/internal/aggregate", async (c) => {
 });
 
 app.post("/internal/weekly-aggregate", async (c) => {
-  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, EMAIL, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
@@ -142,7 +248,7 @@ app.post("/internal/weekly-aggregate", async (c) => {
           try {
             console.log("Starting container weekly aggregation for", weekStartDate);
             await triggerWeeklyContainerAggregation(
-              DB, AGGREGATOR_CONTAINER, RESEND_API_KEY, NOTIFICATION_EMAIL, weekStartDate, DEEPSEEK_API_KEY
+              DB, AGGREGATOR_CONTAINER, EMAIL, weekStartDate, DEEPSEEK_API_KEY
             );
             return;
           } catch (containerErr) {
@@ -151,7 +257,7 @@ app.post("/internal/weekly-aggregate", async (c) => {
         }
         console.log("Starting direct weekly aggregation for", weekStartDate);
         await runWeeklyAggregation(DB, DEEPSEEK_API_KEY, weekStartDate);
-        await sendWeeklyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, weekStartDate);
+        await sendWeeklyEmail(DB, EMAIL, weekStartDate, BASE_URL);
       } catch (err) {
         console.error("Weekly aggregation failed:", err);
       }
@@ -162,7 +268,7 @@ app.post("/internal/weekly-aggregate", async (c) => {
 });
 
 app.post("/internal/send-email", async (c) => {
-  const { DB, RESEND_API_KEY, NOTIFICATION_EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, EMAIL, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
@@ -188,8 +294,8 @@ app.post("/internal/send-email", async (c) => {
   console.log(`[internal] Manual send-email requested: type=${type} date=${date}`);
 
   const success = type === "daily"
-    ? await sendDailyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date)
-    : await sendWeeklyEmail(DB, RESEND_API_KEY, NOTIFICATION_EMAIL, date);
+    ? await sendDailyEmail(DB, EMAIL, date, BASE_URL)
+    : await sendWeeklyEmail(DB, EMAIL, date, BASE_URL);
 
   if (!success) {
     return c.json({ ok: false, error: "Email send failed — check logs for details" }, 500);

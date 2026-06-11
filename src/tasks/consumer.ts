@@ -1,6 +1,6 @@
 // Queue consumer: processes scrape tasks, then triggers aggregation when all tasks complete.
 
-import type { D1Database, MessageBatch, DurableObjectNamespace } from "@cloudflare/workers-types";
+import type { D1Database, MessageBatch, DurableObjectNamespace, SendEmail } from "@cloudflare/workers-types";
 import {
   getTaskById,
   updateTaskToProcessing,
@@ -20,9 +20,10 @@ export interface Env {
   DB: D1Database;
   AGGREGATOR_CONTAINER?: DurableObjectNamespace;
   DEEPSEEK_API_KEY: string;
-  RESEND_API_KEY: string;
-  NOTIFICATION_EMAIL: string;
+  EMAIL: SendEmail;
 }
+
+const BASE_URL = "https://trendcatcher.guoshaotech.com";
 
 async function processTask(
   db: D1Database,
@@ -132,8 +133,7 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
       await triggerContainerAggregation(
         env.DB,
         env.AGGREGATOR_CONTAINER,
-        env.RESEND_API_KEY,
-        env.NOTIFICATION_EMAIL,
+        env.EMAIL,
         date,
         env.DEEPSEEK_API_KEY
       );
@@ -141,7 +141,7 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
       console.log("Using direct Worker aggregation (fallback)");
       await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
       console.log("Aggregation complete, sending email...");
-      await sendDailyEmail(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL, date);
+      await sendDailyEmail(env.DB, env.EMAIL, date, BASE_URL);
       console.log("Email sent");
     }
   } catch (err) {
@@ -158,8 +158,7 @@ async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promis
       await triggerWeeklyContainerAggregation(
         env.DB,
         env.AGGREGATOR_CONTAINER,
-        env.RESEND_API_KEY,
-        env.NOTIFICATION_EMAIL,
+        env.EMAIL,
         weekStartDate,
         env.DEEPSEEK_API_KEY
       );
@@ -167,7 +166,7 @@ async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promis
       console.log("Using direct Worker weekly aggregation (fallback)");
       await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
       console.log("Weekly aggregation complete, sending email...");
-      await sendWeeklyEmail(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL, weekStartDate);
+      await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
       console.log("Weekly email sent");
     }
   } catch (err) {

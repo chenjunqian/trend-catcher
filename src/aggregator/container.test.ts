@@ -13,6 +13,13 @@ import { getContainer } from "@cloudflare/containers";
 import { triggerWeeklyContainerAggregation } from "./container";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
 import { sendWeeklyEmail } from "../notifier/email";
+import type { EmailSender } from "../notifier/email";
+
+function mockEmailSender(): EmailSender {
+  return {
+    send: vi.fn().mockResolvedValue({ messageId: "mock-id" }),
+  };
+}
 
 function mockContainerResponse(ok: boolean, body: unknown) {
   return {
@@ -30,8 +37,7 @@ describe("triggerWeeklyContainerAggregation", () => {
 
   const weekStartDate = "2026-06-01";
   const deepseekApiKey = "sk-test";
-  const resendApiKey = "re-test";
-  const notificationEmail = "test@example.com";
+  const emailSender = mockEmailSender();
 
   it("skips aggregation when no daily summaries exist", async () => {
     const s = newStmt();
@@ -44,7 +50,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     vi.mocked(getContainer).mockReturnValue(stub as any);
 
     await triggerWeeklyContainerAggregation(
-      db, containerBinding, resendApiKey, notificationEmail, weekStartDate, deepseekApiKey
+      db, containerBinding, emailSender, weekStartDate, deepseekApiKey
     );
 
     expect(stub.fetch).not.toHaveBeenCalled();
@@ -82,7 +88,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     vi.mocked(getContainer).mockReturnValue(stub as any);
 
     await triggerWeeklyContainerAggregation(
-      db, containerBinding, resendApiKey, notificationEmail, weekStartDate, deepseekApiKey
+      db, containerBinding, emailSender, weekStartDate, deepseekApiKey
     );
 
     expect(stub.fetch).toHaveBeenCalledTimes(1);
@@ -127,7 +133,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     vi.mocked(getContainer).mockReturnValue(stub as any);
 
     const promise = triggerWeeklyContainerAggregation(
-      db, containerBinding, resendApiKey, notificationEmail, weekStartDate, deepseekApiKey
+      db, containerBinding, emailSender, weekStartDate, deepseekApiKey
     );
 
     // Run immediate attempt (attempt 0)
@@ -163,7 +169,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     vi.mocked(getContainer).mockReturnValue(stub as any);
 
     const promise = triggerWeeklyContainerAggregation(
-      db, containerBinding, resendApiKey, notificationEmail, weekStartDate, deepseekApiKey
+      db, containerBinding, emailSender, weekStartDate, deepseekApiKey
     );
 
     // Catch early to avoid unhandled rejection during timer advancement
@@ -202,7 +208,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     vi.mocked(getContainer).mockReturnValue(stub as any);
 
     await triggerWeeklyContainerAggregation(
-      db, containerBinding, resendApiKey, notificationEmail, weekStartDate, deepseekApiKey
+      db, containerBinding, emailSender, weekStartDate, deepseekApiKey
     );
 
     expect(m.prepare).toHaveBeenCalled();
@@ -211,7 +217,7 @@ describe("triggerWeeklyContainerAggregation", () => {
     expect(weeklyCall).toBeTruthy();
 
     expect(sendWeeklyEmail).toHaveBeenCalledWith(
-      db, resendApiKey, notificationEmail, weekStartDate
+      db, emailSender, weekStartDate, "https://trendcatcher.guoshaotech.com"
     );
   });
 });
