@@ -378,3 +378,52 @@ export function getAllConfirmedSubscribers(
     .prepare("SELECT * FROM newsletter_subscribers WHERE is_confirmed = 1")
     .all();
 }
+
+export interface HomeTimelineItem {
+  type: "daily" | "weekly";
+  display_date: string;
+  created_at: number;
+  full_report_en: string;
+  full_report_zh: string;
+}
+
+export function getHomeTimeline(
+  db: D1Database,
+  cursor?: number,
+  limit: number = 20
+): Promise<D1Result<HomeTimelineItem>> {
+  const fetchLimit = limit + 1;
+
+  if (cursor) {
+    return db
+      .prepare(
+        `SELECT * FROM (
+           SELECT 'daily' as type, summary_date as display_date, created_at, full_report_en, full_report_zh
+           FROM daily_summaries
+           UNION ALL
+           SELECT 'weekly' as type, week_start_date as display_date, created_at, full_report_en, full_report_zh
+           FROM weekly_summaries
+         )
+         WHERE created_at < ?
+         ORDER BY created_at DESC
+         LIMIT ?`
+      )
+      .bind(cursor, fetchLimit)
+      .all();
+  }
+
+  return db
+    .prepare(
+      `SELECT * FROM (
+         SELECT 'daily' as type, summary_date as display_date, created_at, full_report_en, full_report_zh
+         FROM daily_summaries
+         UNION ALL
+         SELECT 'weekly' as type, week_start_date as display_date, created_at, full_report_en, full_report_zh
+         FROM weekly_summaries
+       )
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .bind(fetchLimit)
+    .all();
+}

@@ -1,5 +1,5 @@
 import type { FC } from "hono/jsx";
-import type { DailySummary, WeeklySummary } from "../db/client";
+import type { HomeTimelineItem } from "../db/client";
 import type { Lang } from "../i18n";
 import { t } from "../i18n";
 import Layout from "./layout";
@@ -9,44 +9,14 @@ const ContentHtml: FC<{ html: string }> = ({ html }) => (
   <span dangerouslySetInnerHTML={{ __html: html }} />
 );
 
-interface HomeItem {
-  type: "daily" | "weekly";
-  displayDate: string;
-  report: string;
-  created_at: number;
-}
-
 interface HomeProps {
-  dailySummaries: Pick<
-    DailySummary,
-    "summary_date" | "full_report_en" | "full_report_zh" | "created_at"
-  >[];
-  weeklySummaries: Pick<
-    WeeklySummary,
-    "week_start_date" | "full_report_en" | "full_report_zh" | "created_at"
-  >[];
+  items: HomeTimelineItem[];
+  nextCursor: string | null;
   lang: Lang;
   path: string;
 }
 
-const Home: FC<HomeProps> = ({ dailySummaries, weeklySummaries, lang, path }) => {
-  const items: HomeItem[] = [
-    ...dailySummaries.map((s) => ({
-      type: "daily" as const,
-      displayDate: s.summary_date,
-      report: lang === "zh" ? s.full_report_zh : s.full_report_en,
-      created_at: s.created_at,
-    })),
-    ...weeklySummaries.map((s) => ({
-      type: "weekly" as const,
-      displayDate: s.week_start_date,
-      report: lang === "zh" ? s.full_report_zh : s.full_report_en,
-      created_at: s.created_at,
-    })),
-  ];
-
-  items.sort((a, b) => b.created_at - a.created_at);
-
+const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
   return (
     <Layout title={t(lang, "site.subtitle")} lang={lang} path={path}>
       <h2 style={{ fontSize: "22px", marginBottom: "24px" }}>
@@ -58,47 +28,69 @@ const Home: FC<HomeProps> = ({ dailySummaries, weeklySummaries, lang, path }) =>
           <p style={{ fontSize: "16px" }}>{t(lang, "home.empty")}</p>
         </div>
       ) : (
-        items.map((item) => {
-          const href =
-            item.type === "weekly"
-              ? `/reports/weekly/${item.displayDate}?lang=${lang}`
-              : `/reports/${item.displayDate}?lang=${lang}`;
+        <>
+          {items.map((item) => {
+            const href =
+              item.type === "weekly"
+                ? `/reports/weekly/${item.display_date}?lang=${lang}`
+                : `/reports/${item.display_date}?lang=${lang}`;
 
-          const badgeText =
-            item.type === "weekly"
-              ? t(lang, "badge.weekly")
-              : t(lang, "badge.daily");
+            const badgeText =
+              item.type === "weekly"
+                ? t(lang, "badge.weekly")
+                : t(lang, "badge.daily");
 
-          const label =
-            item.type === "weekly"
-              ? `${t(lang, "report.week_label", { date: item.displayDate })}`
-              : item.displayDate;
+            const label =
+              item.type === "weekly"
+                ? `${t(lang, "report.week_label", { date: item.display_date })}`
+                : item.display_date;
 
-          return (
-            <a
-              href={href}
-              style="text-decoration: none; color: inherit;"
-            >
-              <div class="card">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <h3>{label}</h3>
-                  <span class="badge">{badgeText}</span>
+            const report = lang === "zh" ? item.full_report_zh : item.full_report_en;
+
+            return (
+              <a
+                href={href}
+                style="text-decoration: none; color: inherit;"
+              >
+                <div class="card">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <h3>{label}</h3>
+                    <span class="badge">{badgeText}</span>
+                  </div>
+                  <p>
+                    {report
+                      ? <ContentHtml html={stripMarkdownPreview(report)} />
+                      : "..."}
+                  </p>
                 </div>
-                <p>
-                  {item.report
-                    ? <ContentHtml html={stripMarkdownPreview(item.report)} />
-                    : "..."}
-                </p>
-              </div>
-            </a>
-          );
-        })
+              </a>
+            );
+          })}
+
+          {nextCursor && (
+            <div style={{ textAlign: "center", padding: "16px 0 32px" }}>
+              <a
+                href={`/?cursor=${nextCursor}&lang=${lang}`}
+                style={{
+                  display: "inline-block",
+                  padding: "8px 20px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  color: "#666",
+                }}
+              >
+                {lang === "zh" ? "加载更多" : "Load more"}
+              </a>
+            </div>
+          )}
+        </>
       )}
     </Layout>
   );

@@ -2,24 +2,32 @@ import { Hono } from "hono";
 import Home from "./home";
 import Report from "./report";
 import { ConfirmPage, UnsubscribePage, UnsubscribeSuccessPage, NotFoundPage } from "./newsletter";
-import { getRecentSummaries, getRecentWeeklySummaries, getSummaryByDate, getWeeklySummaryByDate } from "../db/client";
+import { getSummaryByDate, getWeeklySummaryByDate, getHomeTimeline } from "../db/client";
 import { confirmSubscription, unsubscribeByToken, getSubscriberByToken } from "../db/client";
 import { detectLang } from "../i18n";
 import { manifest } from "../pwa/manifest";
 import type { Bindings } from "../index";
+
+const PAGE_SIZE = 20;
 
 const pages = new Hono<{ Bindings: Bindings }>();
 
 pages.get("/", async (c) => {
   const { DB } = c.env;
   const lang = detectLang(c.req.raw);
-  const dailyResult = await getRecentSummaries(DB, 30);
-  const weeklyResult = await getRecentWeeklySummaries(DB, 10);
+  const cursorStr = c.req.query("cursor");
+  const cursor = cursorStr ? parseInt(cursorStr, 10) : undefined;
+
+  const result = await getHomeTimeline(DB, cursor, PAGE_SIZE);
+  const rows = result.results ?? [];
+  const hasMore = rows.length > PAGE_SIZE;
+  const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+  const nextCursor = hasMore ? String(items[items.length - 1].created_at) : null;
 
   return c.html(
     <Home
-      dailySummaries={dailyResult.results ?? []}
-      weeklySummaries={weeklyResult.results ?? []}
+      items={items}
+      nextCursor={nextCursor}
       lang={lang}
       path={c.req.path}
     />
