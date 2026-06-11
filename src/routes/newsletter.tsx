@@ -48,7 +48,7 @@ export const UnsubscribePage: FC<PageProps & { token: string }> = ({ lang, path,
       <div class="container">
         <h1>{t(lang, "newsletter.unsubscribe.title")}</h1>
         <p>{t(lang, "newsletter.unsubscribe.text")}</p>
-        <form method="post" action="/api/unsubscribe">
+        <form method="post" action="/unsubscribe">
           <input type="hidden" name="token" value={token} />
           <button type="submit" class="btn btn-danger">
             {t(lang, "newsletter.unsubscribe.button")}
