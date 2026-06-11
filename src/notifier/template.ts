@@ -15,7 +15,13 @@ export function markdownToHtml(md: string): string {
     .replace(/<\/ul><p><\/p><ul>/g, "</ul><ul>");
 }
 
-export function buildEmailHtml(enReport: string, zhReport: string, title: string): string {
+export function buildEmailHtml(enReport: string, zhReport: string, title: string, unsubscribeUrl?: string): string {
+  const unsubscribeHtml = unsubscribeUrl
+    ? `<div style="text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
+       <a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe / 取消订阅</a>
+       </div>`
+    : "";
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -35,6 +41,7 @@ export function buildEmailHtml(enReport: string, zhReport: string, title: string
       <h2 style="font-size: 18px; font-weight: 400; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e5e5; color: #111;">中文报告</h2>
       ${markdownToHtml(zhReport)}
     </div>
+    ${unsubscribeHtml}
   </main>
 
   <footer style="border-top: 1px solid #e5e5e5; padding: 16px 24px; text-align: center; color: #999; font-size: 12px; margin: 0 -20px -20px;">

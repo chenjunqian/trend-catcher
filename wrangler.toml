@@ -34,7 +34,10 @@ head_sampling_rate = 1
 directory = "./public"
 
 [vars]
-NOTIFICATION_EMAIL = "chenjunqian0810@gmail.com"
+
+[[send_email]]
+name = "EMAIL"
+remote = true
 
 [[containers]]
 max_instances = 1
@@ -51,5 +54,4 @@ new_sqlite_classes = ["AggregatorContainer"]
 
 # Secrets (set via `npx wrangler secret put`):
 #   DEEPSEEK_API_KEY — DeepSeek API key
-#   RESEND_API_KEY   — Resend API key for email
 #   INTERNAL_SECRET  — Internal API auth token

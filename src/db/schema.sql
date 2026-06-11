@@ -34,3 +34,16 @@ CREATE TABLE IF NOT EXISTS weekly_summaries (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    lang TEXT NOT NULL DEFAULT 'en',
+    unsubscribe_token TEXT NOT NULL UNIQUE,
+    is_confirmed INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    confirmed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscribers_email ON newsletter_subscribers (email);
+CREATE INDEX IF NOT EXISTS idx_subscribers_token ON newsletter_subscribers (unsubscribe_token);

@@ -304,3 +304,77 @@ export function updateWeeklySummaryNotified(db: D1Database, weekStartDate: strin
     .bind(now, weekStartDate)
     .run();
 }
+
+export interface NewsletterSubscriber {
+  id: number;
+  email: string;
+  lang: "en" | "zh";
+  unsubscribe_token: string;
+  is_confirmed: number;
+  created_at: number;
+  confirmed_at: number | null;
+}
+
+export function subscribeEmail(
+  db: D1Database,
+  email: string,
+  lang: string,
+  token: string
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return db
+    .prepare(
+      `INSERT INTO newsletter_subscribers (email, lang, unsubscribe_token, is_confirmed, created_at)
+       VALUES (?, ?, ?, 0, ?)
+       ON CONFLICT(email) DO UPDATE SET
+         lang = ?,
+         unsubscribe_token = ?,
+         is_confirmed = 0,
+         created_at = ?`
+    )
+    .bind(email, lang, token, now, lang, token, now)
+    .run();
+}
+
+export function confirmSubscription(
+  db: D1Database,
+  token: string
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return db
+    .prepare(
+      "UPDATE newsletter_subscribers SET is_confirmed = 1, confirmed_at = ? WHERE unsubscribe_token = ? AND is_confirmed = 0"
+    )
+    .bind(now, token)
+    .run();
+}
+
+export function unsubscribeByToken(
+  db: D1Database,
+  token: string
+) {
+  return db
+    .prepare(
+      "DELETE FROM newsletter_subscribers WHERE unsubscribe_token = ?"
+    )
+    .bind(token)
+    .run();
+}
+
+export function getSubscriberByToken(
+  db: D1Database,
+  token: string
+): Promise<NewsletterSubscriber | null> {
+  return db
+    .prepare("SELECT * FROM newsletter_subscribers WHERE unsubscribe_token = ?")
+    .bind(token)
+    .first<NewsletterSubscriber>();
+}
+
+export function getAllConfirmedSubscribers(
+  db: D1Database
+): Promise<D1Result<NewsletterSubscriber>> {
+  return db
+    .prepare("SELECT * FROM newsletter_subscribers WHERE is_confirmed = 1")
+    .all();
+}
