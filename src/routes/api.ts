@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { subscribeEmail } from "../db/client";
+import { subscribeEmail, getHomeTimeline } from "../db/client";
 import { runAggregation } from "../aggregator/aggregate";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
@@ -9,12 +9,27 @@ import { detectLang, t } from "../i18n";
 import type { Bindings } from "../index";
 
 const BASE_URL = "https://trendcatcher.guoshaotech.com";
+const PAGE_SIZE = 20;
 
 const api = new Hono<{ Bindings: Bindings }>();
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
+
+api.get("/api/timeline", async (c) => {
+  const { DB } = c.env;
+  const cursorStr = c.req.query("cursor");
+  const cursor = cursorStr ? parseInt(cursorStr, 10) : undefined;
+
+  const result = await getHomeTimeline(DB, cursor, PAGE_SIZE);
+  const rows = result.results ?? [];
+  const hasMore = rows.length > PAGE_SIZE;
+  const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
+  const nextCursor = hasMore ? String(items[items.length - 1].created_at) : null;
+
+  return c.json({ items, nextCursor });
+});
 
 api.post("/api/subscribe", async (c) => {
   const { DB, EMAIL } = c.env;
