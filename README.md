@@ -25,7 +25,7 @@ Trend Catcher is an AI-powered trend aggregator for indie developers. Every day,
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/<your-username>/trend-catcher.git
+git clone https://github.com/chenjunqian/trend-catcher.git
 cd trend-catcher
 npm install
 
