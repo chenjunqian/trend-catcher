@@ -69,7 +69,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
               {t(lang, "site.title")}
             </a>
           </h1>
-          <nav>
+          <nav style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
             <form id="nl-form" style="display:flex;gap:6px;align-items:center;">
               <input
                 type="email"
@@ -80,7 +80,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
               />
               <button
                 type="submit"
-                style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:12px;background:#fff;cursor:pointer;white-space:nowrap;"
+                style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:12px;background:#fff;cursor:pointer;white-space:nowrap;color:#111;appearance:none;flex-shrink:0;"
               >
                 {t(lang, "newsletter.subscribe")}
               </button>
