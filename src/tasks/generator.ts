@@ -10,7 +10,7 @@ export interface TaskMessage {
   scheduled_date: string;
   website: string;
   item: string;
-  type?: "weekly";
+  type?: "weekly" | "manual-daily" | "manual-weekly";
 }
 
 const WEBSITES = ["producthunt", "hackernews", "github"] as const;
