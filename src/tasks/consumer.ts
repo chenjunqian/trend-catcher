@@ -77,28 +77,34 @@ export async function queueConsumer(
 
   if (firstMsg.body.type === "manual-daily") {
     const date = firstMsg.body.scheduled_date;
-    firstMsg.ack();
-    ctx.waitUntil(triggerAggregation(env, date));
+    try {
+      await triggerAggregation(env, date);
+      firstMsg.ack();
+    } catch {
+      firstMsg.retry();
+    }
     return;
   }
 
   if (firstMsg.body.type === "manual-weekly") {
     const weekStartDate = firstMsg.body.scheduled_date;
-    firstMsg.ack();
-    ctx.waitUntil(triggerWeeklyAggregation(env, weekStartDate));
+    try {
+      await triggerWeeklyAggregation(env, weekStartDate);
+      firstMsg.ack();
+    } catch {
+      firstMsg.retry();
+    }
     return;
   }
 
   if (firstMsg.body.type === "weekly") {
     const weekStartDate = firstMsg.body.scheduled_date;
 
-    // Compute the Sunday of this week (6 days after Monday)
     const mondayDate = new Date(weekStartDate + "T00:00:00Z");
     const sundayDate = new Date(mondayDate);
     sundayDate.setUTCDate(mondayDate.getUTCDate() + 6);
     const sundayStr = sundayDate.toISOString().slice(0, 10);
 
-    // Wait until Sunday's daily scrape tasks are done
     const sundayRemaining = await getPendingTaskCountForDate(env.DB, sundayStr);
     if (sundayRemaining > 0) {
       firstMsg.retry();
@@ -107,8 +113,8 @@ export async function queueConsumer(
 
     try {
       await processTask(env.DB, firstMsg.body);
+      await triggerWeeklyAggregation(env, weekStartDate);
       firstMsg.ack();
-      ctx.waitUntil(triggerWeeklyAggregation(env, weekStartDate));
     } catch {
       firstMsg.retry();
     }

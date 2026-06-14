@@ -64,13 +64,11 @@ describe("queueConsumer — manual-daily messages", () => {
     };
 
     const env = mockEnv();
-    const ctx = mockCtx();
     const batch = makeBatch([makeMsg(msg)]);
 
-    await queueConsumer(batch, env, ctx);
+    await queueConsumer(batch, env, mockCtx());
 
     expect(batch.messages[0].ack).toHaveBeenCalled();
-    expect(ctx.waitUntil).toHaveBeenCalled();
   });
 
   it("does not route manual-daily to weekly aggregation", async () => {
@@ -111,13 +109,11 @@ describe("queueConsumer — manual-weekly messages", () => {
     };
 
     const env = mockEnv();
-    const ctx = mockCtx();
     const batch = makeBatch([makeMsg(msg)]);
 
-    await queueConsumer(batch, env, ctx);
+    await queueConsumer(batch, env, mockCtx());
 
     expect(batch.messages[0].ack).toHaveBeenCalled();
-    expect(ctx.waitUntil).toHaveBeenCalled();
   });
 
   it("does not route manual-weekly to daily aggregation", async () => {
@@ -168,7 +164,6 @@ describe("queueConsumer — weekly messages", () => {
 
     await queueConsumer(batch, env, ctx);
 
-    expect(ctx.waitUntil).toHaveBeenCalled();
     const batchMsgs = batch.messages;
     expect(batchMsgs[0].ack).toHaveBeenCalled();
   });
