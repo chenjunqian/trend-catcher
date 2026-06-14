@@ -1,12 +1,11 @@
 import { Hono } from "hono";
+import type { Queue } from "@cloudflare/workers-types";
 import { subscribeEmail, getHomeTimeline } from "../db/client";
-import { runAggregation } from "../aggregator/aggregate";
-import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
-import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import { getTodayDateString, getLastWeekMonday } from "../utils/date";
 import { detectLang, t } from "../i18n";
 import type { Bindings } from "../index";
+import type { TaskMessage } from "../tasks/generator";
 
 const BASE_URL = "https://trendcatcher.guoshaotech.com";
 const PAGE_SIZE = 20;
@@ -70,83 +69,47 @@ api.post("/api/subscribe", async (c) => {
 });
 
 api.post("/internal/aggregate", async (c) => {
-  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, SCRAPE_QUEUE, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
     return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  if (!DEEPSEEK_API_KEY) {
-    return c.json({ error: "DEEPSEEK_API_KEY not configured" }, 500);
   }
 
   const date = getTodayDateString();
+  const queue = SCRAPE_QUEUE as unknown as Queue<TaskMessage>;
 
-  c.executionCtx.waitUntil(
-    (async () => {
-      try {
-        if (AGGREGATOR_CONTAINER) {
-          try {
-            console.log("Starting container aggregation for", date);
-            await triggerContainerAggregation(
-              DB, AGGREGATOR_CONTAINER, EMAIL, date, DEEPSEEK_API_KEY
-            );
-            return;
-          } catch (containerErr) {
-            console.warn("Container aggregation failed, falling back to Worker:", (containerErr as Error).message);
-          }
-        }
-        console.log("Starting direct aggregation for", date);
-        await runAggregation(DB, DEEPSEEK_API_KEY, date);
-        await sendDailyEmail(DB, EMAIL, date, BASE_URL);
-      } catch (err) {
-        console.error("Aggregation failed:", err);
-      }
-    })()
-  );
+  await queue.send({
+    id: `manual_${date}_daily`,
+    scheduled_date: date,
+    website: "daily",
+    item: "aggregate",
+    type: "manual-daily",
+  });
 
-  return c.json({ ok: true, message: "Aggregation started" });
+  return c.json({ ok: true, message: "Daily aggregation triggered" });
 });
 
 api.post("/internal/weekly-aggregate", async (c) => {
-  const { DB, AGGREGATOR_CONTAINER, DEEPSEEK_API_KEY, EMAIL, INTERNAL_SECRET } = c.env;
+  const { DB, SCRAPE_QUEUE, INTERNAL_SECRET } = c.env;
 
   const auth = c.req.header("Authorization") || "";
   if (auth !== `Bearer ${INTERNAL_SECRET}`) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  if (!DEEPSEEK_API_KEY) {
-    return c.json({ error: "DEEPSEEK_API_KEY not configured" }, 500);
-  }
-
   const weekStartDate = getLastWeekMonday();
+  const queue = SCRAPE_QUEUE as unknown as Queue<TaskMessage>;
 
-  c.executionCtx.waitUntil(
-    (async () => {
-      try {
-        if (AGGREGATOR_CONTAINER) {
-          try {
-            console.log("Starting container weekly aggregation for", weekStartDate);
-            await triggerWeeklyContainerAggregation(
-              DB, AGGREGATOR_CONTAINER, EMAIL, weekStartDate, DEEPSEEK_API_KEY
-            );
-            return;
-          } catch (containerErr) {
-            console.warn("Container weekly aggregation failed, falling back to Worker:", (containerErr as Error).message);
-          }
-        }
-        console.log("Starting direct weekly aggregation for", weekStartDate);
-        await runWeeklyAggregation(DB, DEEPSEEK_API_KEY, weekStartDate);
-        await sendWeeklyEmail(DB, EMAIL, weekStartDate, BASE_URL);
-      } catch (err) {
-        console.error("Weekly aggregation failed:", err);
-      }
-    })()
-  );
+  await queue.send({
+    id: `manual_${weekStartDate}_weekly`,
+    scheduled_date: weekStartDate,
+    website: "weekly",
+    item: "aggregate",
+    type: "manual-weekly",
+  });
 
-  return c.json({ ok: true, message: "Weekly aggregation started" });
+  return c.json({ ok: true, message: "Weekly aggregation triggered" });
 });
 
 api.post("/internal/send-email", async (c) => {

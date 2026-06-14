@@ -4,29 +4,12 @@ import { queueConsumer, type Env } from "./consumer";
 import type { TaskMessage } from "./generator";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
 
-vi.mock("../aggregator/aggregate", () => ({
-  runAggregation: vi.fn(),
-  SYSTEM_PROMPT: "",
-  MAX_STEPS: 20,
-}));
-
 vi.mock("../aggregator/container", () => ({
   triggerContainerAggregation: vi.fn(),
   triggerWeeklyContainerAggregation: vi.fn(),
 }));
 
-vi.mock("../aggregator/weekly-aggregate", () => ({
-  runWeeklyAggregation: vi.fn(),
-}));
-
-vi.mock("../notifier/email", () => ({
-  sendDailyEmail: vi.fn(),
-  sendWeeklyEmail: vi.fn(),
-}));
-
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
-import { runAggregation } from "../aggregator/aggregate";
-import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
 
 function makeMsg(body: TaskMessage) {
   return {
@@ -62,6 +45,100 @@ function mockEnv(): Env {
     EMAIL: mockEmail(),
   };
 }
+
+describe("queueConsumer — manual-daily messages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("triggers daily container aggregation", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-14_daily",
+      scheduled_date: "2026-06-14",
+      website: "daily",
+      item: "aggregate",
+      type: "manual-daily",
+    };
+
+    const env = mockEnv();
+    const ctx = mockCtx();
+    const batch = makeBatch([makeMsg(msg)]);
+
+    await queueConsumer(batch, env, ctx);
+
+    expect(batch.messages[0].ack).toHaveBeenCalled();
+    expect(ctx.waitUntil).toHaveBeenCalled();
+  });
+
+  it("does not route manual-daily to weekly aggregation", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-14_daily",
+      scheduled_date: "2026-06-14",
+      website: "daily",
+      item: "aggregate",
+      type: "manual-daily",
+    };
+
+    const env = mockEnv();
+    const batch = makeBatch([makeMsg(msg)]);
+    await queueConsumer(batch, env, mockCtx());
+
+    expect(triggerWeeklyContainerAggregation).not.toHaveBeenCalled();
+  });
+});
+
+describe("queueConsumer — manual-weekly messages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("triggers weekly container aggregation", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-08_weekly",
+      scheduled_date: "2026-06-08",
+      website: "weekly",
+      item: "aggregate",
+      type: "manual-weekly",
+    };
+
+    const env = mockEnv();
+    const ctx = mockCtx();
+    const batch = makeBatch([makeMsg(msg)]);
+
+    await queueConsumer(batch, env, ctx);
+
+    expect(batch.messages[0].ack).toHaveBeenCalled();
+    expect(ctx.waitUntil).toHaveBeenCalled();
+  });
+
+  it("does not route manual-weekly to daily aggregation", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-08_weekly",
+      scheduled_date: "2026-06-08",
+      website: "weekly",
+      item: "aggregate",
+      type: "manual-weekly",
+    };
+
+    const env = mockEnv();
+    const batch = makeBatch([makeMsg(msg)]);
+    await queueConsumer(batch, env, mockCtx());
+
+    expect(triggerContainerAggregation).not.toHaveBeenCalled();
+  });
+});
 
 describe("queueConsumer — weekly messages", () => {
   beforeEach(() => {
@@ -117,11 +194,10 @@ describe("queueConsumer — weekly messages", () => {
     const batch = makeBatch([makeMsg(weeklyMsg)]);
     await queueConsumer(batch, env, mockCtx());
 
-    expect(runAggregation).not.toHaveBeenCalled();
     expect(triggerContainerAggregation).not.toHaveBeenCalled();
   });
 
-  it("calls weekly aggregation with the correct weekStartDate", async () => {
+  it("calls weekly container aggregation with the correct weekStartDate", async () => {
     const s = newStmt();
     const m = mockD1(s);
 
@@ -137,18 +213,14 @@ describe("queueConsumer — weekly messages", () => {
       DB: m as unknown as D1Database,
       DEEPSEEK_API_KEY: "sk-test",
       EMAIL: mockEmail(),
-      AGGREGATOR_CONTAINER: undefined,
+      AGGREGATOR_CONTAINER: {} as unknown as DurableObjectNamespace,
     };
 
     const batch = makeBatch([makeMsg(weeklyMsg)]);
     await queueConsumer(batch, env, mockCtx());
 
     await vi.waitFor(() => {
-      expect(runWeeklyAggregation).toHaveBeenCalledWith(
-        m as unknown as D1Database,
-        "sk-test",
-        "2026-06-01"
-      );
+      expect(triggerWeeklyContainerAggregation).toHaveBeenCalled();
     }, { timeout: 1000 });
   });
 
@@ -219,7 +291,6 @@ describe("queueConsumer — daily messages", () => {
     await queueConsumer(batch, env, mockCtx());
 
     // Daily messages don't route to weekly
-    expect(runWeeklyAggregation).not.toHaveBeenCalled();
     expect(triggerWeeklyContainerAggregation).not.toHaveBeenCalled();
   });
 });
