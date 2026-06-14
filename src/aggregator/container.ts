@@ -38,7 +38,7 @@ export async function triggerContainerAggregation(
   const totalItems = Object.values(rawData).reduce((s, arr) => s + arr.length, 0);
   console.log(`[container-orch] Sending ${totalItems} items to container (ph=${rawData.producthunt.length}, hn=${rawData.hackernews.length}, gh=${rawData.github.length})`);
 
-  const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "daily");
+  const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "trend-catcher");
 
   const request = new Request("http://container/aggregate", {
     method: "POST",
@@ -124,7 +124,7 @@ export async function triggerWeeklyContainerAggregation(
     return;
   }
 
-  const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "weekly");
+  const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "trend-catcher");
 
   const request = new Request("http://container/aggregate-weekly", {
     method: "POST",
