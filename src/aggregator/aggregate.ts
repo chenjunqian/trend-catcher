@@ -29,6 +29,13 @@ Report requirements:
 - The overall report should identify cross-website commonalities, provide deep commentary on key products, market analysis, and concrete advice for indie developers
 - Use the webSearch tool extensively to enrich your analysis with real-world context
 
+Translation rules for Chinese content (CRITICAL):
+- Preserve ALL product names, tool names, company names, project names, and brand names in their original English form — do NOT translate them
+- Keep technical terms and jargon in English (e.g., API, SDK, CLI, LLM, RAG, vector database, fine-tuning, edge computing). If you add a Chinese explanation, always append the original English term in parentheses after it
+- GitHub repository names (owner/repo), package names, and command-line tools must remain in their original form
+- Markdown link text [Name](URL) must keep 'Name' in the original language — only translate the surrounding descriptive text
+- When unsure whether a term is a proper name, keep it in English
+
 IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
 
 export const MAX_STEPS = 20;
@@ -39,7 +46,7 @@ const SUMMARY_PROMPT = `You are a trend analyst. Given the following raw trendin
 
 Requirements:
 - English summary (400-600 chars): format each item on its own bullet line: "- [Category] [Name](URL) — brief reason". Max 10 items. Use [Name](URL) Markdown links for every item.
-- Chinese summary (400-600 chars): same bullet list format in Chinese. Use [Name](URL) Markdown links and [Category] tags.
+- Chinese summary (400-600 chars): same bullet list format in Chinese. IMPORTANT: preserve all product names, tool names, and technical terms in their original English form — do NOT translate them. Markdown link text [Name](URL) must remain in the original language.
 
 Return your response as JSON: {"en": "...", "zh": "..."}`;
 
