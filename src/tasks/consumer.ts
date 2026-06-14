@@ -11,7 +11,7 @@ import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
 import { runAggregation } from "../aggregator/aggregate";
-import { triggerContainerAggregation } from "../aggregator/container";
+import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import type { TaskMessage } from "./generator";
@@ -152,11 +152,23 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
 async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promise<void> {
   try {
     console.log("Starting weekly aggregation...");
-    console.log("Using direct Worker weekly aggregation");
-    await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
-    console.log("Weekly aggregation complete, sending email...");
-    await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
-    console.log("Weekly email sent");
+
+    if (env.AGGREGATOR_CONTAINER) {
+      console.log("Using container for weekly aggregation");
+      await triggerWeeklyContainerAggregation(
+        env.DB,
+        env.AGGREGATOR_CONTAINER,
+        env.EMAIL,
+        weekStartDate,
+        env.DEEPSEEK_API_KEY
+      );
+    } else {
+      console.log("Using direct Worker weekly aggregation (fallback)");
+      await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
+      console.log("Weekly aggregation complete, sending email...");
+      await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
+      console.log("Weekly email sent");
+    }
   } catch (err) {
     console.error("Weekly aggregation failed:", err);
   }

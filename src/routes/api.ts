@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { subscribeEmail, getHomeTimeline } from "../db/client";
 import { runAggregation } from "../aggregator/aggregate";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
-import { triggerContainerAggregation } from "../aggregator/container";
+import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import { getTodayDateString, getLastWeekMonday } from "../utils/date";
 import { detectLang, t } from "../i18n";
@@ -126,6 +126,17 @@ api.post("/internal/weekly-aggregate", async (c) => {
   c.executionCtx.waitUntil(
     (async () => {
       try {
+        if (AGGREGATOR_CONTAINER) {
+          try {
+            console.log("Starting container weekly aggregation for", weekStartDate);
+            await triggerWeeklyContainerAggregation(
+              DB, AGGREGATOR_CONTAINER, EMAIL, weekStartDate, DEEPSEEK_API_KEY
+            );
+            return;
+          } catch (containerErr) {
+            console.warn("Container weekly aggregation failed, falling back to Worker:", (containerErr as Error).message);
+          }
+        }
         console.log("Starting direct weekly aggregation for", weekStartDate);
         await runWeeklyAggregation(DB, DEEPSEEK_API_KEY, weekStartDate);
         await sendWeeklyEmail(DB, EMAIL, weekStartDate, BASE_URL);
