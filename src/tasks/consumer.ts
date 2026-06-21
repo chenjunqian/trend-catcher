@@ -139,6 +139,12 @@ export async function queueConsumer(
   if (remaining === 0) {
     ctx.waitUntil(triggerAggregation(env, date));
   }
+
+  // Check if there's a weekly task in the batch and trigger weekly aggregation
+  const weeklyTask = batch.messages.find((m) => m.body.type === "weekly");
+  if (weeklyTask) {
+    ctx.waitUntil(triggerWeeklyAggregation(env, weeklyTask.body.scheduled_date));
+  }
 }
 
 async function triggerAggregation(env: Env, date: string): Promise<void> {
