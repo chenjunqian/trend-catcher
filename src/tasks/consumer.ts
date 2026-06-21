@@ -97,8 +97,33 @@ export async function queueConsumer(
     return;
   }
 
-  if (firstMsg.body.type === "weekly") {
-    const weekStartDate = firstMsg.body.scheduled_date;
+  const weeklyMessages = batch.messages.filter((m) => m.body.type === "weekly");
+  const dailyMessages = batch.messages.filter((m) => m.body.type !== "weekly");
+
+  // Process daily scrape tasks
+  if (dailyMessages.length > 0) {
+    await Promise.all(
+      dailyMessages.map(async (msg) => {
+        try {
+          await processTask(env.DB, msg.body);
+          msg.ack();
+        } catch {
+          msg.retry();
+        }
+      })
+    );
+
+    const date = dailyMessages[0].body.scheduled_date;
+    const remaining = await getPendingTaskCountForDate(env.DB, date);
+
+    if (remaining === 0) {
+      ctx.waitUntil(triggerAggregation(env, date));
+    }
+  }
+
+  // Process weekly tasks
+  for (const msg of weeklyMessages) {
+    const weekStartDate = msg.body.scheduled_date;
 
     const mondayDate = new Date(weekStartDate + "T00:00:00Z");
     const sundayDate = new Date(mondayDate);
@@ -107,43 +132,17 @@ export async function queueConsumer(
 
     const sundayRemaining = await getPendingTaskCountForDate(env.DB, sundayStr);
     if (sundayRemaining > 0) {
-      firstMsg.retry();
-      return;
+      msg.retry();
+      continue;
     }
 
-    try {
-      await processTask(env.DB, firstMsg.body);
-      await triggerWeeklyAggregation(env, weekStartDate);
-      firstMsg.ack();
-    } catch {
-      firstMsg.retry();
-    }
-    return;
-  }
-
-  const promises = batch.messages.map(async (msg) => {
     try {
       await processTask(env.DB, msg.body);
+      await triggerWeeklyAggregation(env, weekStartDate);
       msg.ack();
     } catch {
       msg.retry();
     }
-  });
-
-  await Promise.all(promises);
-
-  // Check if all tasks for today are done
-  const date = firstMsg.body.scheduled_date;
-  const remaining = await getPendingTaskCountForDate(env.DB, date);
-
-  if (remaining === 0) {
-    ctx.waitUntil(triggerAggregation(env, date));
-  }
-
-  // Check if there's a weekly task in the batch and trigger weekly aggregation
-  const weeklyTask = batch.messages.find((m) => m.body.type === "weekly");
-  if (weeklyTask) {
-    ctx.waitUntil(triggerWeeklyAggregation(env, weeklyTask.body.scheduled_date));
   }
 }
 
