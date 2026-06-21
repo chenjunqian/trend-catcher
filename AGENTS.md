@@ -320,7 +320,7 @@ Every new function must have tests covering:
 
 ### Commit Policy — Always Ask First
 
-**Never commit changes without explicit user confirmation.** For every request, you must ask the user whether to commit before running any git commit command — even if the user confirmed a commit in a previous request. Each request/session is independent.
+**Never commit or push changes without explicit user confirmation.** For every request, you must ask the user whether to commit/push before running any `git commit` or `git push` command — even if the user confirmed a commit/push in a previous request within the same session. Each request/session is independent.
 
 ### Before Committing
 
