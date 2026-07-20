@@ -52,6 +52,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
           .report p { margin: 8px 0; }
           .report ul, .report ol { margin: 8px 0; padding-left: 24px; }
           .report a { text-decoration: underline; }
+          .card a { text-decoration: underline; }
           .back-link { display: inline-block; margin-bottom: 16px; font-size: 14px; color: #666; }
           .empty { text-align: center; padding: 60px 20px; color: #999; }
           .lang-section { margin-top: 24px; }
