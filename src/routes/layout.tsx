@@ -136,6 +136,14 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
               msg.style.color=isError?'#f78166':'#999';
             }
             function clearMsg(){if(msg){msg.textContent='';msg.style.color='#999';}}
+            function escapeHtml(s){
+              return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            }
+            function stripPreview(md,maxLen){
+              if(maxLen===undefined)maxLen=200;
+              var text=md.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'$1').replace(/\*\*(.+?)\*\*/g,'$1').replace(/^#+\s/gm,'').replace(/\n\n/g,' ').replace(/\n/g,' ');
+              return text.slice(0,maxLen)+(md.length>maxLen?'...':'');
+            }
             btn.addEventListener('click',async function(){
               var cursor=this.dataset.cursor;
               var lang=this.dataset.lang;
@@ -165,10 +173,10 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
                   html+='<a href="'+href+'" style="text-decoration:none;color:inherit;">'+
                     '<div class="card">'+
                       '<div style="display:flex;align-items:center;justify-content:space-between;">'+
-                        '<h3>'+label+'</h3>'+
-                        '<span class="badge">'+badge+'</span>'+
+                        '<h3>'+escapeHtml(label)+'</h3>'+
+                        '<span class="badge">'+escapeHtml(badge)+'</span>'+
                       '</div>'+
-                      '<p>'+report+'</p>'+
+                      '<p>'+escapeHtml(stripPreview(report))+'</p>'+
                     '</div>'+
                   '</a>';
                 }
