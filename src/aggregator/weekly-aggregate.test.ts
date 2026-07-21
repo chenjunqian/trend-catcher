@@ -8,7 +8,7 @@ vi.mock("./llm", () => ({
   createDeepSeekModel: vi.fn(() => ({})),
 }));
 
-vi.mock("./weekly-tools", () => ({
+vi.mock("./tools", () => ({
   createWeeklyAgentTools: vi.fn(() => ({
     getDailySummaries: {},
     webSearch: {},
@@ -106,7 +106,7 @@ describe("runWeeklyAggregation", () => {
   });
 
   it("creates weekly agent tools with correct weekStartDate", async () => {
-    const { createWeeklyAgentTools } = await import("./weekly-tools");
+    const { createWeeklyAgentTools } = await import("./tools");
     const db = {} as unknown as D1Database;
     await runWeeklyAggregation(db, "sk-key", "2026-06-01");
 

@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import { createDeepSeekModel } from "../aggregator/llm";
 import { createInMemoryAgentTools } from "../aggregator/tools";
-import { createInMemoryWeeklyAgentTools } from "../aggregator/weekly-tools";
+import { createInMemoryWeeklyAgentTools } from "../aggregator/tools";
 import { runAgentLoop, SYSTEM_PROMPT, MAX_STEPS } from "../aggregator/aggregate";
 import { runWeeklyAgentLoop, WEEKLY_SYSTEM_PROMPT, WEEKLY_MAX_STEPS } from "../aggregator/weekly-aggregate";
 
