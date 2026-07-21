@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import type { LanguageModelV1 } from "ai";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createDeepSeekModel } from "./llm";
-import { createWeeklyAgentTools } from "./weekly-tools";
+import { createWeeklyAgentTools } from "./tools";
 import type { SiteSummaryEntry } from "./tools";
 import {
   getWeeklySummaryByDate,

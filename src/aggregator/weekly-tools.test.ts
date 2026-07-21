@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolExecutionOptions } from "ai";
-import { createWeeklyAgentTools } from "./weekly-tools";
-import { createInMemoryWeeklyAgentTools } from "./weekly-tools";
+import { createWeeklyAgentTools } from "./tools";
+import { createInMemoryWeeklyAgentTools } from "./tools";
 import { newStmt, mockD1 } from "../test-utils/d1-mock";
 
 vi.mock("./search", () => ({
