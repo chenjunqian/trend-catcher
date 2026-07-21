@@ -100,7 +100,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
         </footer>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){
+            __html: String.raw`(function(){
             var f=document.getElementById('nl-form');
             var m=document.getElementById('nl-msg');
             f.addEventListener('submit',async function(e){
@@ -125,7 +125,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){
+            __html: String.raw`(function(){
             var btn=document.getElementById('load-more');
             if(!btn)return;
             var container=document.getElementById('items-container');
@@ -192,7 +192,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
               }catch(e){
                 var errMsg=lang==='zh'?'加载失败，请重试':'Failed to load. Please try again.';
                 setMsg(errMsg,true);
-                alert(errMsg+'\\n'+e.message);
+                alert(errMsg+'\n'+e.message);
                 btn.disabled=false;
                 btn.textContent=lang==='zh'?'加载更多':'Load more';
               }
