@@ -93,6 +93,10 @@ const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
               >
                 {lang === "zh" ? "加载更多" : "Load more"}
               </button>
+              <div
+                id="load-more-msg"
+                style="font-size:12px;color:#999;margin-top:8px;min-height:1.2em;"
+              />
             </div>
           )}
         </>

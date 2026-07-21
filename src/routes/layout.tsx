@@ -98,8 +98,9 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
           &copy; {new Date().getFullYear()} Trend Catcher —{" "}
           {t(lang, "footer")}
         </footer>
-        <script>
-          {`(function(){
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
             var f=document.getElementById('nl-form');
             var m=document.getElementById('nl-msg');
             f.addEventListener('submit',async function(e){
@@ -119,22 +120,41 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
                 else{m.style.color='#f78166';m.textContent=d.error;}
               }catch(e){m.style.color='#f78166';m.textContent='Network error';}
             });
-          })();`}
-        </script>
-        <script>
-          {`(function(){
+          })();`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
             var btn=document.getElementById('load-more');
             if(!btn)return;
             var container=document.getElementById('items-container');
+            var msg=document.getElementById('load-more-msg');
+            function setMsg(text,isError){
+              if(!msg)return;
+              msg.textContent=text;
+              msg.style.color=isError?'#f78166':'#999';
+            }
+            function clearMsg(){if(msg){msg.textContent='';msg.style.color='#999';}}
             btn.addEventListener('click',async function(){
               var cursor=this.dataset.cursor;
               var lang=this.dataset.lang;
               this.disabled=true;
               this.textContent='...';
+              setMsg(lang==='zh'?'加载中...':'Loading...');
               try{
                 var r=await fetch('/api/timeline?cursor='+encodeURIComponent(cursor)+'&lang='+encodeURIComponent(lang));
+                if(!r.ok){
+                  var errBody='';
+                  try{errBody=' ('+(await r.json()).error+')';}catch(e){}
+                  throw new Error('HTTP '+r.status+errBody);
+                }
                 var d=await r.json();
-                if(!d.items||!d.items.length)return;
+                if(!d.items||!d.items.length){
+                  setMsg(lang==='zh'?'没有更多报告了':'No more reports');
+                  btn.remove();
+                  return;
+                }
                 var html='';
                 for(var i=0;i<d.items.length;i++){
                   var it=d.items[i];
@@ -153,6 +173,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
                   '</a>';
                 }
                 container.insertAdjacentHTML('beforeend',html);
+                clearMsg();
                 if(d.nextCursor){
                   btn.dataset.cursor=d.nextCursor;
                   btn.disabled=false;
@@ -161,12 +182,16 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
                   btn.remove();
                 }
               }catch(e){
+                var errMsg=lang==='zh'?'加载失败，请重试':'Failed to load. Please try again.';
+                setMsg(errMsg,true);
+                alert(errMsg+'\\n'+e.message);
                 btn.disabled=false;
                 btn.textContent=lang==='zh'?'加载更多':'Load more';
               }
             });
-          })();`}
-        </script>
+          })();`,
+          }}
+        />
       </body>
     </html>
   );
