@@ -430,4 +430,4 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 - **Product Hunt**: Homepage HTML is Cloudflare-protected. Use Atom RSS feed at `/feed` instead
 - **Hacker News**: Use official Firebase API (free, no auth, rate-limited at ~10k/hour)
 - **GitHub Trending**: Server-rendered HTML, parsed with cheerio
-- **DeepSeek**: Uses OpenAI-compatible API at `https://api.deepseek.com/v1`, model `deepseek-chat`
+- **DeepSeek**: Uses OpenAI-compatible API at `https://api.deepseek.com/v1`, model `deepseek-v4-flash`

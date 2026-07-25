@@ -186,7 +186,7 @@ trend-catcher/
 | Framework | Hono.js (JSX SSR) |
 | Database | Cloudflare D1 (SQLite) |
 | Queue | Cloudflare Queues |
-| LLM | DeepSeek (`deepseek-chat`, OpenAI SDK) |
+| LLM | DeepSeek (`deepseek-v4-flash`, OpenAI SDK) |
 | Email | Cloudflare Email Send (`[[send_email]]`) |
 | Testing | Vitest (16 test files) |
 
