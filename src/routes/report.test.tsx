@@ -40,6 +40,18 @@ describe("Report — daily", () => {
     expect(html).toContain("2026-06-06");
   });
 
+  it("renders story headline block", () => {
+    const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
+    expect(html).toContain('class="story-head"');
+    expect(html).toContain('class="story-title"');
+  });
+
+  it("renders site summaries in newspaper columns", () => {
+    const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
+    expect(html).toContain('class="columns"');
+    expect(html).toContain('class="column"');
+  });
+
   it("shows site summaries section", () => {
     const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
     expect(html).toContain("Site Summaries");

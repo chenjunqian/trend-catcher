@@ -15,7 +15,7 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#fdfcf8" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Trend Catcher" />
@@ -30,68 +30,125 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
         <style>{`
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           html { overscroll-behavior: contain; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff; color: #111; line-height: 1.6; }
-          a { color: #111; text-decoration: none; }
+          body { font-family: Georgia, "Times New Roman", "Songti SC", "Noto Serif SC", "SimSun", serif; background: #fdfcf8; color: #1a1a1a; line-height: 1.7; }
+          a { color: inherit; text-decoration: none; }
           a:hover { text-decoration: underline; }
-          header { border-bottom: 1px solid #e5e5e5; padding: 16px 24px; background: #fafafa; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-          header h1 { font-size: 20px; font-weight: 400; letter-spacing: -0.5px; }
-          header nav { display: flex; gap: 16px; align-items: center; }
-          header nav a { font-size: 14px; }
-          .lang-switch { padding: 4px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; color: #666; }
-          .lang-switch:hover { background: #f0f0f0; text-decoration: none; color: #111; }
-          main { max-width: 840px; margin: 0 auto; padding: 24px 16px; }
-          footer { border-top: 1px solid #e5e5e5; padding: 16px 24px; text-align: center; color: #999; font-size: 12px; }
-          .card { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 4px; padding: 20px; margin-bottom: 16px; transition: border-color .2s; }
-          .card:hover { border-color: #ccc; }
-          .card h3 { font-size: 16px; font-weight: 400; margin-bottom: 8px; }
-          .card .meta { color: #999; font-size: 13px; }
-          .card p { margin-top: 8px; color: #555; font-size: 14px; }
-          .badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 11px; background: #000; color: #fff; font-weight: 500; }
-          .report h2 { font-size: 18px; font-weight: 400; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e5e5; }
-          .report h3 { font-size: 16px; font-weight: 400; margin: 16px 0 8px; }
-          .report p { margin: 8px 0; }
-          .report ul, .report ol { margin: 8px 0; padding-left: 24px; }
-          .report a { text-decoration: underline; }
-          .card a { text-decoration: underline; }
-          .back-link { display: inline-block; margin-bottom: 16px; font-size: 14px; color: #666; }
-          .empty { text-align: center; padding: 60px 20px; color: #999; }
-          .lang-section { margin-top: 24px; }
-          .lang-section h2 { margin: 16px 0 12px; }
-          .pull-indicator { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-end; height: 0; overflow: hidden; background: #fff; transition: height .15s ease-out; }
-          .pull-indicator .spinner { width: 20px; height: 20px; border: 2px solid #e5e5e5; border-top-color: #111; border-radius: 50%; animation: ptr-spin .6s linear infinite; margin-bottom: 10px; }
+
+          .masthead { border-top: 6px solid #1a1a1a; border-bottom: 2px solid #1a1a1a; padding: 18px 16px 0; background: #fdfcf8; }
+          .masthead-inner { max-width: 880px; margin: 0 auto; }
+          .masthead-title { font-size: clamp(40px, 8vw, 64px); font-weight: 700; line-height: 1.1; text-align: center; letter-spacing: -1px; }
+          .masthead-title a:hover { text-decoration: none; }
+          .masthead-tagline { text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #6b6b6b; margin-top: 6px; }
+          .masthead-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-top: 1px solid #d8d2c4; margin-top: 14px; padding: 10px 0; }
+          .masthead-edition { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #b03a2e; }
+          .masthead-nav { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+          .nl-form { display: flex; align-items: stretch; border: 1px solid #1a1a1a; background: #fff; }
+          .nl-input { border: 0; outline: none; background: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; padding: 6px 10px; width: 170px; color: #1a1a1a; }
+          .nl-btn { border: 0; border-left: 1px solid #1a1a1a; background: #1a1a1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 7px 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+          .nl-btn:hover { background: #b03a2e; text-decoration: none; }
+          #nl-msg { font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+          .lang-switch { border: 1px solid #1a1a1a; background: #fff; padding: 5px 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #1a1a1a; }
+          .lang-switch:hover { background: #1a1a1a; color: #fff; text-decoration: none; }
+
+          main { max-width: 880px; margin: 0 auto; padding: 28px 16px 40px; }
+          .section-title { display: flex; align-items: center; gap: 14px; font-size: 22px; font-weight: 700; margin: 8px 0 22px; }
+          .section-title::before, .section-title::after { content: ""; flex: 1; height: 1px; background: #1a1a1a; }
+          .badge { display: inline-block; padding: 2px 9px; background: #1a1a1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }
+          .badge-weekly { background: #b03a2e; }
+
+          .card-link { display: block; }
+          .card-link:hover { text-decoration: none; }
+          .card-link:hover .card-date { text-decoration: underline; }
+          .card { padding: 16px 2px; border-top: 1px solid #e0dbcc; }
+          .card-link:first-child .card { border-top: 3px solid #1a1a1a; }
+          .card-link:hover .card { background: #f6f3e8; }
+          .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+          .card-date { font-size: 20px; font-weight: 700; }
+          .card-link:first-child .card-date { font-size: 24px; }
+          .card-preview { margin-top: 8px; font-size: 14px; line-height: 1.7; color: #4a4a4a; text-align: justify; }
+
+          .back-link { display: inline-block; margin-bottom: 18px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6b6b; }
+          .back-link:hover { color: #1a1a1a; }
+          .story-head { border-top: 5px solid #1a1a1a; border-bottom: 2px solid #1a1a1a; padding: 16px 0 14px; margin-bottom: 24px; text-align: center; }
+          .story-title { font-size: clamp(26px, 5vw, 40px); font-weight: 700; line-height: 1.2; }
+          .story-type { display: block; margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0.3em; text-transform: uppercase; color: #b03a2e; }
+
+          .columns { columns: 3; column-gap: 28px; column-rule: 1px solid #d8d2c4; }
+          .column { break-inside: avoid; padding-bottom: 6px; }
+          .column-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 6px; margin-bottom: 8px; }
+          .column-name { font-size: 17px; font-weight: 700; }
+          .column-body { font-size: 13.5px; line-height: 1.65; text-align: justify; }
+          .column-body p { margin: 0 0 8px; }
+          .column-body h1, .column-body h2, .column-body h3 { font-size: 15px; margin: 10px 0 6px; }
+          .column-body ul, .column-body ol { margin: 0 0 8px; padding-left: 18px; }
+          .column-body li { margin-bottom: 4px; }
+          .column-body a { text-decoration: underline; text-underline-offset: 3px; }
+
+          .report { margin-top: 26px; }
+          .lang-section { margin-top: 30px; padding-top: 26px; border-top: 4px solid #1a1a1a; }
+          .lang-section h2 { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; margin-bottom: 16px; }
+          .report-body p { margin: 0 0 14px; text-align: justify; }
+          .report-body p:first-of-type::first-letter { float: left; font-size: 3.4em; line-height: 0.85; font-weight: 700; padding: 4px 8px 0 0; color: #b03a2e; }
+          .report-body h1, .report-body h2 { font-size: 22px; font-weight: 700; margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #1a1a1a; }
+          .report-body h3 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; }
+          .report-body ul, .report-body ol { margin: 0 0 14px; padding-left: 26px; }
+          .report-body li { margin-bottom: 6px; }
+          .report-body a { text-decoration: underline; text-underline-offset: 3px; }
+          .report-body a:hover { color: #b03a2e; }
+          .report-body blockquote { margin: 0 0 14px; padding-left: 16px; border-left: 3px solid #1a1a1a; font-style: italic; color: #555; }
+          .report-empty { color: #8a8578; font-style: italic; }
+
+          .empty { text-align: center; padding: 60px 20px; color: #8a8578; font-style: italic; }
+          .load-more-wrap { text-align: center; padding: 16px 0 32px; }
+          .btn-load-more { padding: 10px 28px; border: 1px solid #1a1a1a; background: #fff; font-family: Georgia, "Times New Roman", "Songti SC", "Noto Serif SC", "SimSun", serif; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: #1a1a1a; cursor: pointer; }
+          .btn-load-more:hover { background: #1a1a1a; color: #fff; }
+
+          footer { border-top: 4px double #1a1a1a; padding: 18px 24px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #6b6b6b; }
+          .pull-indicator { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-end; height: 0; overflow: hidden; background: #fdfcf8; transition: height .15s ease-out; }
+          .pull-indicator .spinner { width: 20px; height: 20px; border: 2px solid #e0dbcc; border-top-color: #1a1a1a; border-radius: 50%; animation: ptr-spin .6s linear infinite; margin-bottom: 10px; }
           @keyframes ptr-spin { to { transform: rotate(360deg); } }
+          @media (max-width: 720px) {
+            .columns { columns: 1; column-rule: none; }
+            .column { border-bottom: 1px solid #e0dbcc; padding-bottom: 12px; margin-bottom: 12px; }
+            .masthead-actions { justify-content: center; }
+          }
         `}</style>
         <script src="/register-sw.js" />
         <script src="/pull-to-refresh.js" />
       </head>
       <body>
-        <header>
-          <h1>
-            <a href={`/?lang=${lang}`}>
-              {t(lang, "site.title")}
-            </a>
-          </h1>
-          <nav style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-            <form id="nl-form" style="display:flex;gap:6px;align-items:center;">
-              <input
-                type="email"
-                id="nl-email"
-                placeholder={t(lang, "newsletter.placeholder")}
-                style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:170px;"
-                required
-              />
-              <button
-                type="submit"
-                style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:12px;background:#fff;cursor:pointer;white-space:nowrap;color:#111;appearance:none;flex-shrink:0;"
-              >
-                {t(lang, "newsletter.subscribe")}
-              </button>
-            </form>
-            <span id="nl-msg" style="font-size:11px;"></span>
-            <a href={`${path}?lang=${altLang}`} class="lang-switch">
-              {t(lang, "lang.switch")}
-            </a>
-          </nav>
+        <header class="masthead">
+          <div class="masthead-inner">
+            <h1 class="masthead-title">
+              <a href={`/?lang=${lang}`}>
+                {t(lang, "site.title")}
+              </a>
+            </h1>
+            <p class="masthead-tagline">{t(lang, "site.tagline")}</p>
+            <div class="masthead-actions">
+              <span class="masthead-edition">
+                {t(lang, "badge.daily")} · {t(lang, "badge.weekly")}
+              </span>
+              <nav class="masthead-nav">
+                <form id="nl-form" class="nl-form">
+                  <input
+                    type="email"
+                    id="nl-email"
+                    class="nl-input"
+                    placeholder={t(lang, "newsletter.placeholder")}
+                    required
+                  />
+                  <button type="submit" class="nl-btn">
+                    {t(lang, "newsletter.subscribe")}
+                  </button>
+                </form>
+                <span id="nl-msg"></span>
+                <a href={`${path}?lang=${altLang}`} class="lang-switch">
+                  {t(lang, "lang.switch")}
+                </a>
+              </nav>
+            </div>
+          </div>
         </header>
         <main>{children}</main>
         <footer>
@@ -170,13 +227,13 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
                   var badge=it.type==='weekly'?(lang==='zh'?'周报':'Weekly'):(lang==='zh'?'日报':'Daily');
                   var label=it.type==='weekly'?(lang==='zh'?it.display_date+' 所在周':'Week of '+it.display_date):it.display_date;
                   var report=lang==='zh'?it.full_report_zh:it.full_report_en;
-                  html+='<a href="'+href+'" style="text-decoration:none;color:inherit;">'+
+                  html+='<a href="'+href+'" class="card-link">'+
                     '<div class="card">'+
-                      '<div style="display:flex;align-items:center;justify-content:space-between;">'+
-                        '<h3>'+escapeHtml(label)+'</h3>'+
-                        '<span class="badge">'+escapeHtml(badge)+'</span>'+
+                      '<div class="card-top">'+
+                        '<span class="card-date">'+escapeHtml(label)+'</span>'+
+                        '<span class="badge'+(it.type==='weekly'?' badge-weekly':'')+'">'+escapeHtml(badge)+'</span>'+
                       '</div>'+
-                      '<p>'+escapeHtml(stripPreview(report))+'</p>'+
+                      '<p class="card-preview">'+escapeHtml(stripPreview(report))+'</p>'+
                     '</div>'+
                   '</a>';
                 }
