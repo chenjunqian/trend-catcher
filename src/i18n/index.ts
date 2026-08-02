@@ -4,6 +4,7 @@ const translations: Record<Lang, Record<string, string>> = {
   en: {
     "site.title": "Trend Catcher",
     "site.subtitle": "Daily Trend Reports",
+    "site.tagline": "Daily & Weekly Tech Trends",
     "nav.home": "Home",
     "nav.reports": "Reports",
     "home.heading": "Daily Trend Reports",
@@ -46,6 +47,7 @@ const translations: Record<Lang, Record<string, string>> = {
   zh: {
     "site.title": "猎趋",
     "site.subtitle": "每日趋势日报",
+    "site.tagline": "每日 · 每周科技趋势",
     "nav.home": "首页",
     "nav.reports": "报告",
     "home.heading": "每日趋势报告",

@@ -111,4 +111,26 @@ describe("Home — paginated timeline", () => {
     const html = render();
     expect(html).toContain('id="items-container"');
   });
+
+  it("renders newspaper masthead", () => {
+    const html = render();
+    expect(html).toContain('class="masthead"');
+    expect(html).toContain('class="masthead-title"');
+  });
+
+  it("renders section title with flanking rules", () => {
+    const html = render();
+    expect(html).toContain('class="section-title"');
+  });
+
+  it("structures cards as editorial strips", () => {
+    const html = render();
+    expect(html).toContain('class="card-top"');
+    expect(html).toContain('class="card-date"');
+  });
+
+  it("marks weekly items with the weekly badge modifier", () => {
+    const html = render();
+    expect(html).toContain('class="badge badge-weekly"');
+  });
 });

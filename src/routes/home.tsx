@@ -19,7 +19,7 @@ interface HomeProps {
 const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
   return (
     <Layout title={t(lang, "site.subtitle")} lang={lang} path={path}>
-      <h2 style={{ fontSize: "22px", marginBottom: "24px" }}>
+      <h2 class="section-title">
         {t(lang, "home.heading")}
       </h2>
 
@@ -49,22 +49,17 @@ const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
               const report = lang === "zh" ? item.full_report_zh : item.full_report_en;
 
               return (
-                <a
-                  href={href}
-                  style="text-decoration: none; color: inherit;"
-                >
+                <a href={href} class="card-link">
                   <div class="card">
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <h3>{label}</h3>
-                      <span class="badge">{badgeText}</span>
+                    <div class="card-top">
+                      <span class="card-date">{label}</span>
+                      <span
+                        class={`badge${item.type === "weekly" ? " badge-weekly" : ""}`}
+                      >
+                        {badgeText}
+                      </span>
                     </div>
-                    <p>
+                    <p class="card-preview">
                       {report
                         ? <ContentHtml html={stripMarkdownPreview(report)} />
                         : "..."}
@@ -76,20 +71,12 @@ const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
           </div>
 
           {nextCursor && (
-            <div style={{ textAlign: "center", padding: "16px 0 32px" }}>
+            <div class="load-more-wrap">
               <button
                 id="load-more"
+                class="btn-load-more"
                 data-cursor={nextCursor}
                 data-lang={lang}
-                style={{
-                  padding: "8px 20px",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "14px",
-                  color: "#666",
-                  background: "#fff",
-                  cursor: "pointer",
-                }}
               >
                 {lang === "zh" ? "加载更多" : "Load more"}
               </button>

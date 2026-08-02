@@ -43,27 +43,35 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
         {t(lang, "report.back")}
       </a>
 
-      <h2 style={{ fontSize: "22px", marginBottom: "16px" }}>
-        {displayDate} {t(lang, isWeekly ? "report.weekly_heading" : "report.heading")}
-      </h2>
+      <div class="story-head">
+        <h2 class="story-title">
+          {displayDate}
+          <span class="story-type">
+            {t(lang, isWeekly ? "report.weekly_heading" : "report.heading")}
+          </span>
+        </h2>
+      </div>
 
       {Object.keys(siteSummaries).length > 0 && (
-        <div>
-          <h3 style={{ fontSize: "18px", marginBottom: "12px" }}>
+        <section>
+          <h3 class="section-title">
             {t(lang, "report.site_summaries")}
           </h3>
-          {Object.entries(siteSummaries).map(([website, entry]) => (
-            <div class="card" key={website}>
-              <h3>
-                {SITE_LABELS[website] || website}
-                <span class="badge" style="margin-left: 8px;">
-                  {website}
-                </span>
-              </h3>
-              <ReportContent html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)} />
-            </div>
-          ))}
-        </div>
+          <div class="columns">
+            {Object.entries(siteSummaries).map(([website, entry]) => (
+              <div class="column" key={website}>
+                <div class="column-head">
+                  <span class="column-name">{SITE_LABELS[website] || website}</span>
+                  <span class="badge">{website}</span>
+                </div>
+                <ReportContent
+                  className="column-body"
+                  html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <div class="report">
@@ -73,9 +81,9 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
               {t(lang, "report.overall")}
             </h2>
             {summary.full_report_en ? (
-              <ReportContent html={renderMarkdown(summary.full_report_en)} />
+              <ReportContent className="report-body" html={renderMarkdown(summary.full_report_en)} />
             ) : (
-              <p style="color: #999;">{t(lang, "report.empty")}</p>
+              <p class="report-empty">{t(lang, "report.empty")}</p>
             )}
           </div>
         )}
@@ -86,9 +94,9 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
               {t(lang, "report.overall")}
             </h2>
             {summary.full_report_zh ? (
-              <ReportContent html={renderMarkdown(summary.full_report_zh)} />
+              <ReportContent className="report-body" html={renderMarkdown(summary.full_report_zh)} />
             ) : (
-              <p style="color: #999;">{t(lang, "report.empty")}</p>
+              <p class="report-empty">{t(lang, "report.empty")}</p>
             )}
           </div>
         )}
@@ -97,8 +105,8 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
   );
 };
 
-const ReportContent: FC<{ html: string }> = ({ html }) => (
-  <div dangerouslySetInnerHTML={{ __html: html }} />
+const ReportContent: FC<{ html: string; className?: string }> = ({ html, className }) => (
+  <div class={className} dangerouslySetInnerHTML={{ __html: html }} />
 );
 
 export default Report;
