@@ -82,7 +82,7 @@ npx wrangler secret put INTERNAL_SECRET
 npm run deploy
 ```
 
-Cron runs automatically at UTC 1:00 AM daily.
+Cron runs automatically at UTC 0:00 AM (8:00 AM Beijing) daily.
 
 ---
 
@@ -110,7 +110,7 @@ Cron runs automatically at UTC 1:00 AM daily.
 ## Architecture
 
 ```
-Cron Trigger (UTC 1:00 AM)
+Cron Trigger (UTC 0:00 AM / 8:00 AM Beijing)
     │
     ├── Daily Path (Mon-Sat)
     │   Generator ──► Queue ──► Scrapers

@@ -22,9 +22,9 @@ max_batch_size = 10
 max_batch_timeout = 5
 max_retries = 3
 
-# Daily cron at UTC 1:00 AM
+# Daily cron at UTC 0:00 AM (8:00 AM Beijing time)
 [triggers]
-crons = ["0 1 * * *"]
+crons = ["0 0 * * *"]
 
 [observability]
 enabled = true

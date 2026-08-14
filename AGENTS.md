@@ -8,7 +8,7 @@
 - **Web framework**: Hono.js (JSX server-side rendering)
 - **DB**: Cloudflare D1 (SQLite)
 - **Queue**: Cloudflare Queues
-- **Cron**: Daily at UTC 1:00 AM
+- **Cron**: Daily at UTC 0:00 AM (8:00 AM Beijing)
 - **LLM**: DeepSeek (via `@ai-sdk/openai` → `api.deepseek.com/v1`)
 - **Email**: Cloudflare Email Send (`[[send_email]]` binding, no API key needed)
 - **Language**: TypeScript (strict mode), all code and configuration in English
@@ -20,7 +20,7 @@
 ### Daily Flow
 
 ```
-Cron Trigger (UTC 1:00)
+Cron Trigger (UTC 0:00 / 8:00 AM Beijing)
   → generator.ts: creates scrape tasks in D1 + enqueues to scrape-queue
   → On Sunday: also enqueues a weekly task via enqueueWeeklyTask()
       ↓

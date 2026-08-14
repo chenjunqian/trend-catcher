@@ -1,5 +1,5 @@
 // Task generation and enqueueing for the daily cron trigger.
-// Runs at UTC 1:00 AM each day, creates scrape tasks and pushes them to the queue.
+// Runs at UTC 0:00 AM (8:00 AM Beijing time) each day, creates scrape tasks and pushes them to the queue.
 
 import type { D1Database, Queue } from "@cloudflare/workers-types";
 import { getTodayDateString, getLastWeekMonday } from "../utils/date";
