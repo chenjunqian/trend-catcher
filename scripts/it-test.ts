@@ -319,7 +319,11 @@ async function main() {
   console.log("╚══════════════════════════════════════════════╝");
 }
 
-main().catch((err) => {
-  console.error("IT test failed:", err.message ?? err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("IT test failed:", err.message ?? err);
+    process.exit(1);
+  });

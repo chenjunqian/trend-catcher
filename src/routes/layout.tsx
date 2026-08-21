@@ -83,6 +83,11 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
           .column-body ul, .column-body ol { margin: 0 0 8px; padding-left: 18px; }
           .column-body li { margin-bottom: 4px; }
           .column-body a { text-decoration: underline; text-underline-offset: 3px; }
+          .site-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-top: 12px; }
+          .site-image { margin: 0; }
+          .site-image img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border: 1px solid #d8d2c4; background: #f6f3e8; }
+          .site-image figcaption { margin-top: 3px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; line-height: 1.3; color: #6b6b6b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .site-image figcaption a:hover { color: #b03a2e; }
 
           .report { margin-top: 26px; }
           .lang-section { margin-top: 30px; padding-top: 26px; border-top: 4px solid #1a1a1a; }

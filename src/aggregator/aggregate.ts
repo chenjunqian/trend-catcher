@@ -18,14 +18,17 @@ Your tools and workflow:
 
 3. Analyze the data for each website and identify up to 10 noteworthy products or topics per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], etc. Format each item on its own Markdown bullet list line: "- [Category] [Name](URL) — description". Do NOT write prose paragraphs. ALWAYS use Markdown link format [Name](URL) from the raw data. Incorporate insights from webSearch into each item's description.
 
-4. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links.
+4. Use searchImages to find a relevant image for every item in each site's summary: call it ONCE per website with ALL item names from that site's summary and set website to that site. The tool automatically finds each item's own page URL from the scraped data and harvests its own image (GitHub repo preview card or the page's og:image); it falls back to search-engine images only when the item's page has none. Then pass the returned images into the corresponding saveSiteSummary call. Product names must stay in their original English form.
 
-5. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. This should be a ~15-minute read for indie developers. Structure the report with sections: (a) Cross-Website Trend Synthesis — what themes appear across sites, (b) Product Deep Dives — commentary and analysis on 3-5 standout products with webSearch insights, (c) Market Implications — what these trends mean for indie developers, (d) Actionable Opportunities — specific ideas and advice for builders.
+5. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links. Also pass the images you got from searchImages (max 10, one per listed item).
+
+6. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. This should be a ~15-minute read for indie developers. Structure the report with sections: (a) Cross-Website Trend Synthesis — what themes appear across sites, (b) Product Deep Dives — commentary and analysis on 3-5 standout products with webSearch insights, (c) Market Implications — what these trends mean for indie developers, (d) Actionable Opportunities — specific ideas and advice for builders.
 
 Report requirements:
 - Summaries and reports must be generated in BOTH English AND Chinese
 - Target indie developers, focusing on actionable opportunities and trends
 - Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
+- Each site summary SHOULD include a related image for up to 10 items, passed via the images field of saveSiteSummary
 - The overall report should identify cross-website commonalities, provide deep commentary on key products, market analysis, and concrete advice for indie developers
 - Use the webSearch tool extensively to enrich your analysis with real-world context
 
@@ -38,7 +41,7 @@ Translation rules for Chinese content (CRITICAL):
 
 IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
 
-export const MAX_STEPS = 20;
+export const MAX_STEPS = 30;
 
 const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
 
@@ -143,7 +146,7 @@ export async function runAggregation(
   date: string
 ): Promise<void> {
   const model = createDeepSeekModel(apiKey);
-  const tools = createAgentTools(db, date);
+  const tools = createAgentTools(db, date, model);
 
   console.log("[aggregate] Starting agent loop...");
   await generateText({

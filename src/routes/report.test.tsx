@@ -128,6 +128,112 @@ describe("Report — weekly", () => {
   });
 });
 
+describe("Report — site summary image gallery", () => {
+  const wiredSummary = {
+    ...dailySummary,
+    site_summaries: JSON.stringify({
+      producthunt: {
+        en: "- [AI] [Arc Browser](https://arc.net) — a browser",
+        zh: "- [AI] [Arc Browser](https://arc.net) — 浏览器",
+        images: [{ name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" }],
+      },
+      github: { en: "GH summary EN", zh: "GH summary ZH" },
+    }),
+  };
+
+  it("renders a gallery of thumbnails when images exist", () => {
+    const html = render({
+      summary: wiredSummary,
+      lang: "en",
+      path: "/reports/2026-06-06",
+    });
+    expect(html).toContain('class="site-gallery"');
+    expect(html).toContain('src="https://thumbs.example.com/arc.jpg"');
+    expect(html).toContain('alt="Arc Browser"');
+    expect(html).toContain("loading=\"lazy\"");
+    expect(html).toContain('referrerPolicy="no-referrer"');
+  });
+
+  it("links the gallery caption to the product URL from the summary", () => {
+    const html = render({
+      summary: wiredSummary,
+      lang: "en",
+      path: "/reports/2026-06-06",
+    });
+    expect(html).toContain('href="https://arc.net"');
+    expect(html).toContain("Arc Browser");
+  });
+
+  it("links caption when image name is a substring of the summary link", () => {
+    const substringSummary = {
+      ...dailySummary,
+      site_summaries: JSON.stringify({
+        producthunt: {
+          en: "- [AI] [Arc Browser](https://arc.net) — a browser",
+          zh: "- [AI] [Arc Browser](https://arc.net) — 浏览器",
+          images: [{ name: "Arc", url: "https://thumbs.example.com/arc.jpg" }],
+        },
+      }),
+    };
+    const html = render({
+      summary: substringSummary,
+      lang: "en",
+      path: "/reports/2026-06-06",
+    });
+    expect(html).toContain('href="https://arc.net"');
+    expect(html).toContain(">Arc</a>");
+  });
+
+  it("does not render a gallery when images are absent", () => {
+    const html = render({
+      summary: dailySummary,
+      lang: "en",
+      path: "/reports/2026-06-06",
+    });
+    expect(html).not.toContain('class="site-gallery"');
+  });
+
+  it("skips malformed images entries", () => {
+    const malformed = {
+      ...dailySummary,
+      site_summaries: JSON.stringify({
+        producthunt: {
+          en: "- [AI] [Arc Browser](https://arc.net) — a browser",
+          zh: "- [AI] [Arc Browser](https://arc.net) — 浏览器",
+          images: [{ name: "Arc Browser", url: "not-a-url" }],
+        },
+      }),
+    };
+    const html = render({
+      summary: malformed,
+      lang: "en",
+      path: "/reports/2026-06-06",
+    });
+    expect(html).not.toContain('class="site-gallery"');
+  });
+
+  it("renders the gallery on weekly reports too", () => {
+    const weekly = {
+      ...weeklySummary,
+      site_summaries: JSON.stringify({
+        producthunt: {
+          en: "- [AI] [Arc Browser](https://arc.net) — a browser",
+          zh: "- [AI] [Arc Browser](https://arc.net) — 浏览器",
+          images: [{ name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" }],
+        },
+      }),
+    };
+    const html = render({
+      summary: weekly as any,
+      lang: "en",
+      path: "/reports/weekly/2026-06-01",
+      isWeekly: true,
+    });
+    expect(html).toContain('class="site-gallery"');
+    expect(html).toContain('src="https://thumbs.example.com/arc.jpg"');
+  });
+});
+
 describe("Report — malformed site_summaries", () => {
   it("handles invalid JSON gracefully", () => {
     const badSummary = {

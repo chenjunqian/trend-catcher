@@ -9,5 +9,5 @@ export function createDeepSeekModel(apiKey: string): LanguageModelV1 {
     apiKey,
   });
 
-  return provider("deepseek-v4-flash");
+  return provider("deepseek-v4-flash-vision-exp");
 }

@@ -1,4 +1,5 @@
 import { tool } from "ai";
+import type { LanguageModelV1 } from "ai";
 import { z } from "zod";
 import type { D1Database } from "@cloudflare/workers-types";
 import {
@@ -11,12 +12,25 @@ import {
 } from "../db/client";
 import { getDateRangeForWeek } from "../utils/date";
 import { searchWeb } from "./search";
+import {
+  searchImages,
+  selectBestImage,
+  resolveItemImage,
+  extractItemUrlByName,
+  extractLinkByName,
+} from "./image-search";
 import { fetchHtml } from "../utils/fetcher";
 import * as cheerio from "cheerio";
+
+export interface SiteImage {
+  name: string;
+  url: string;
+}
 
 export interface SiteSummaryEntry {
   en: string;
   zh: string;
+  images?: SiteImage[];
 }
 
 function createWebSearchTool(logPrefix: string) {
@@ -93,9 +107,144 @@ function createWebfetchTool(logPrefix: string) {
 
 // ─── Daily tools (Worker) ────────────────────────────────────────────
 
-export function createAgentTools(db: D1Database, date: string) {
+type ItemUrlResolver = (website: string, name: string) => Promise<string | undefined>;
+
+function createImageSearchTool(
+  model: LanguageModelV1 | null,
+  logPrefix: string,
+  resolveItemUrl: ItemUrlResolver
+) {
+  return tool({
+    description:
+      "Find a relevant image for each of the given product/topic names. Call this ONCE per website with ALL item names from that site's summary. The tool automatically finds each item's page URL from the site's data and harvests the item's own image (GitHub repo preview card or the page's og:image); it only falls back to search-engine images when the item's page has no usable image. Returns { name, url } entries (url is the image URL); items with no usable image are omitted. Set website to the site the summary belongs to.",
+    parameters: z.object({
+      website: z
+        .enum(["producthunt", "hackernews", "github"])
+        .describe("Website of the summary these items belong to"),
+      items: z
+        .array(
+          z.object({
+            name: z
+              .string()
+              .min(1)
+              .max(120)
+              .describe("Exact product or topic name as it appears in the summary"),
+          })
+        )
+        .min(1)
+        .max(10)
+        .describe("All item names of one website summary (max 10)"),
+    }),
+    execute: async ({ website, items }) => {
+      console.log(
+        `${logPrefix} searchImages(${website}): ${items.map((i) => i.name).join(", ").slice(0, 200)}`
+      );
+
+      const resolved = await Promise.all(
+        items.map(async ({ name }) => {
+          try {
+            let imageUrl: string | null = null;
+            const pageUrl = await resolveItemUrl(website, name);
+            if (pageUrl) {
+              imageUrl = await resolveItemImage(pageUrl);
+            }
+            if (!imageUrl) {
+              const candidates = await searchImages(name, 4);
+              const best = await selectBestImage(model, name, candidates);
+              if (best) {
+                imageUrl = best.thumbnail;
+              }
+            }
+            if (imageUrl) {
+              return { name, url: imageUrl };
+            }
+            console.log(`${logPrefix} searchImages: no image for "${name}"`);
+            return null;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const images: SiteImage[] = resolved.filter(
+        (img): img is SiteImage => img !== null
+      );
+
+      return {
+        images,
+        totalFound: images.length,
+        note: images.length === 0 ? "No images found for any item." : undefined,
+      };
+    },
+  });
+}
+
+function createDailyItemUrlResolver(
+  db: D1Database,
+  date: string
+): ItemUrlResolver {
+  return async (website, name) => {
+    const result = await getCompletedTasksByDateAndWebsite(db, date, website);
+    const items = (result.results ?? []).map((t) => {
+      try {
+        return t.raw_data ? JSON.parse(t.raw_data) : null;
+      } catch {
+        return null;
+      }
+    });
+    return extractItemUrlByName(items, name);
+  };
+}
+
+function extractLinkFromSummaries(
+  summaries: Array<{ site_summaries: string }>,
+  website: string,
+  name: string
+): string | undefined {
+  for (const summary of summaries) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(summary.site_summaries);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object") continue;
+    const entry = (parsed as Record<string, unknown>)[website];
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    for (const key of ["en", "zh"] as const) {
+      const text = record[key];
+      if (typeof text !== "string") continue;
+      const url = extractLinkByName(text, name);
+      if (url) return url;
+    }
+  }
+  return undefined;
+}
+
+function createWeeklyItemUrlResolver(
+  db: D1Database,
+  weekStartDate: string
+): ItemUrlResolver {
+  return async (website, name) => {
+    const dates = getDateRangeForWeek(weekStartDate);
+    const result = await getDailySummariesForWeek(db, weekStartDate, dates[6]);
+    return extractLinkFromSummaries(result.results ?? [], website, name);
+  };
+}
+
+export function createAgentTools(
+  db: D1Database,
+  date: string,
+  model: LanguageModelV1 | null = null
+) {
   const webSearch = createWebSearchTool("[tool]");
   const webfetch = createWebfetchTool("[tool]");
+  const imageSearch = createImageSearchTool(
+    model,
+    "[tool]",
+    createDailyItemUrlResolver(db, date)
+  );
 
   const getRawDataByWebsite = tool({
     description:
@@ -140,7 +289,7 @@ export function createAgentTools(db: D1Database, date: string) {
 
   const saveSiteSummary = tool({
     description:
-      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
+      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Optionally pass images: one per listed item (max 10), where name exactly matches the item name in the summary and url comes from searchImages. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
@@ -151,9 +300,21 @@ export function createAgentTools(db: D1Database, date: string) {
       summaryZh: z
         .string()
         .describe("Chinese summary (400-600 chars). Same bullet list format. Max 10 items."),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(120),
+            url: z.string().url(),
+          })
+        )
+        .max(10)
+        .optional()
+        .describe("Optional related images, one per listed item (max 10). name must exactly match an item name in the summary; url comes from searchImages."),
     }),
-    execute: async ({ website, summaryEn, summaryZh }) => {
-      console.log(`[tool] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
+    execute: async ({ website, summaryEn, summaryZh, images }) => {
+      console.log(
+        `[tool] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c, images=${images?.length ?? 0})`
+      );
 
       const existing = await getSummaryByDate(db, date);
 
@@ -168,7 +329,11 @@ export function createAgentTools(db: D1Database, date: string) {
       }
 
       const before = Object.keys(siteSummaries);
-      siteSummaries[website] = { en: summaryEn, zh: summaryZh };
+      const entry: SiteSummaryEntry = { en: summaryEn, zh: summaryZh };
+      if (images && images.length > 0) {
+        entry.images = images;
+      }
+      siteSummaries[website] = entry;
       const after = Object.keys(siteSummaries);
 
       console.log(`[tool] saveSiteSummary: sites before=${before.join(",") || "none"} after=${after.join(",")}`);
@@ -228,6 +393,7 @@ export function createAgentTools(db: D1Database, date: string) {
     getRawDataByWebsite,
     webSearch,
     webfetch,
+    searchImages: imageSearch,
     saveSiteSummary,
     saveFinalReport,
   };
@@ -237,13 +403,19 @@ export function createAgentTools(db: D1Database, date: string) {
 
 export function createInMemoryAgentTools(
   date: string,
-  rawData: Record<string, unknown[]>
+  rawData: Record<string, unknown[]>,
+  model: LanguageModelV1 | null = null
 ) {
   const siteSummaries: Record<string, SiteSummaryEntry> = {};
   let reportEn = "";
   let reportZh = "";
   const webSearch = createWebSearchTool("[tool:mem]");
   const webfetch = createWebfetchTool("[tool:mem]");
+  const imageSearch = createImageSearchTool(
+    model,
+    "[tool:mem]",
+    async (website, name) => extractItemUrlByName(rawData[website] ?? [], name)
+  );
 
   const getRawDataByWebsite = tool({
     description:
@@ -277,7 +449,7 @@ export function createInMemoryAgentTools(
 
   const saveSiteSummary = tool({
     description:
-      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
+      "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Optionally pass images: one per listed item (max 10), where name exactly matches the item name in the summary and url comes from searchImages. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
@@ -288,10 +460,26 @@ export function createInMemoryAgentTools(
       summaryZh: z
         .string()
         .describe("Chinese summary (400-600 chars). Same bullet list format. Max 10 items."),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(120),
+            url: z.string().url(),
+          })
+        )
+        .max(10)
+        .optional()
+        .describe("Optional related images, one per listed item (max 10). name must exactly match an item name in the summary; url comes from searchImages."),
     }),
-    execute: async ({ website, summaryEn, summaryZh }) => {
-      console.log(`[tool:mem] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
-      siteSummaries[website] = { en: summaryEn, zh: summaryZh };
+    execute: async ({ website, summaryEn, summaryZh, images }) => {
+      console.log(
+        `[tool:mem] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c, images=${images?.length ?? 0})`
+      );
+      const entry: SiteSummaryEntry = { en: summaryEn, zh: summaryZh };
+      if (images && images.length > 0) {
+        entry.images = images;
+      }
+      siteSummaries[website] = entry;
       return { success: true, website, date };
     },
   });
@@ -324,6 +512,7 @@ export function createInMemoryAgentTools(
       getRawDataByWebsite,
       webSearch,
       webfetch,
+      searchImages: imageSearch,
       saveSiteSummary,
       saveFinalReport,
     },
@@ -337,11 +526,20 @@ export function createInMemoryAgentTools(
 
 // ─── Weekly tools (Worker) ──────────────────────────────────────────
 
-export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
+export function createWeeklyAgentTools(
+  db: D1Database,
+  weekStartDate: string,
+  model: LanguageModelV1 | null = null
+) {
   const weekDates = getDateRangeForWeek(weekStartDate);
   const weekEndDate = weekDates[6];
   const webSearch = createWebSearchTool("[tool:weekly]");
   const webfetch = createWebfetchTool("[tool:weekly]");
+  const imageSearch = createImageSearchTool(
+    model,
+    "[tool:weekly]",
+    createWeeklyItemUrlResolver(db, weekStartDate)
+  );
 
   const getDailySummaries = tool({
     description:
@@ -370,7 +568,7 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
 
   const saveSiteSummary = tool({
     description:
-      "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items.",
+      "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Optionally pass images: one per listed item (max 10), where name exactly matches the item name in the summary and url comes from searchImages.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
@@ -381,9 +579,21 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
       summaryZh: z
         .string()
         .describe("Chinese weekly summary (400-600 chars)"),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(120),
+            url: z.string().url(),
+          })
+        )
+        .max(10)
+        .optional()
+        .describe("Optional related images, one per listed item (max 10). name must exactly match an item name in the summary; url comes from searchImages."),
     }),
-    execute: async ({ website, summaryEn, summaryZh }) => {
-      console.log(`[tool:weekly] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
+    execute: async ({ website, summaryEn, summaryZh, images }) => {
+      console.log(
+        `[tool:weekly] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c, images=${images?.length ?? 0})`
+      );
 
       const existing = await getWeeklySummaryByDate(db, weekStartDate);
 
@@ -397,7 +607,11 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
         }
       }
 
-      siteSummaries[website] = { en: summaryEn, zh: summaryZh };
+      const entry: SiteSummaryEntry = { en: summaryEn, zh: summaryZh };
+      if (images && images.length > 0) {
+        entry.images = images;
+      }
+      siteSummaries[website] = entry;
 
       await upsertWeeklySummary(db, {
         week_start_date: weekStartDate,
@@ -447,6 +661,7 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
     getDailySummaries,
     webSearch,
     webfetch,
+    searchImages: imageSearch,
     saveSiteSummary,
     saveFinalReport,
   };
@@ -461,13 +676,19 @@ export function createInMemoryWeeklyAgentTools(
     full_report_en: string;
     full_report_zh: string;
     site_summaries: string;
-  }>
+  }>,
+  model: LanguageModelV1 | null = null
 ) {
   const siteSummaries: Record<string, SiteSummaryEntry> = {};
   let reportEn = "";
   let reportZh = "";
   const webSearch = createWebSearchTool("[tool:mem:weekly]");
   const webfetch = createWebfetchTool("[tool:mem:weekly]");
+  const imageSearch = createImageSearchTool(
+    model,
+    "[tool:mem:weekly]",
+    async (website, name) => extractLinkFromSummaries(dailySummaries, website, name)
+  );
 
   const getDailySummaries = tool({
     description:
@@ -486,7 +707,7 @@ export function createInMemoryWeeklyAgentTools(
 
   const saveSiteSummary = tool({
     description:
-      "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters.",
+      "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Optionally pass images: one per listed item (max 10), where name exactly matches the item name in the summary and url comes from searchImages.",
     parameters: z.object({
       website: z
         .enum(["producthunt", "hackernews", "github"])
@@ -497,10 +718,26 @@ export function createInMemoryWeeklyAgentTools(
       summaryZh: z
         .string()
         .describe("Chinese weekly summary (400-600 chars)"),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(120),
+            url: z.string().url(),
+          })
+        )
+        .max(10)
+        .optional()
+        .describe("Optional related images, one per listed item (max 10). name must exactly match an item name in the summary; url comes from searchImages."),
     }),
-    execute: async ({ website, summaryEn, summaryZh }) => {
-      console.log(`[tool:mem:weekly] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c)`);
-      siteSummaries[website] = { en: summaryEn, zh: summaryZh };
+    execute: async ({ website, summaryEn, summaryZh, images }) => {
+      console.log(
+        `[tool:mem:weekly] saveSiteSummary: ${website} (en=${summaryEn.length}c, zh=${summaryZh.length}c, images=${images?.length ?? 0})`
+      );
+      const entry: SiteSummaryEntry = { en: summaryEn, zh: summaryZh };
+      if (images && images.length > 0) {
+        entry.images = images;
+      }
+      siteSummaries[website] = entry;
       return { success: true, website, weekStartDate };
     },
   });
@@ -529,6 +766,7 @@ export function createInMemoryWeeklyAgentTools(
       getDailySummaries,
       webSearch,
       webfetch,
+      searchImages: imageSearch,
       saveSiteSummary,
       saveFinalReport,
     },

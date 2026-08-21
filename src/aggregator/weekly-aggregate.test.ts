@@ -59,6 +59,7 @@ describe("WEEKLY_SYSTEM_PROMPT", () => {
     expect(WEEKLY_SYSTEM_PROMPT).toContain("past week");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("synthesize");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("week's worth of daily");
+    expect(WEEKLY_SYSTEM_PROMPT).toContain("searchImages");
   });
 
   it("mentions bilingual requirements", () => {
@@ -75,8 +76,8 @@ describe("WEEKLY_SYSTEM_PROMPT", () => {
 });
 
 describe("WEEKLY_MAX_STEPS", () => {
-  it("is 20", () => {
-    expect(WEEKLY_MAX_STEPS).toBe(20);
+  it("is 30", () => {
+    expect(WEEKLY_MAX_STEPS).toBe(30);
   });
 });
 
@@ -94,7 +95,7 @@ describe("runWeeklyAggregation", () => {
 
     expect(callArgs.system).toBeTruthy();
     expect(callArgs.tools).toBeTruthy();
-    expect(callArgs.maxSteps).toBe(20);
+    expect(callArgs.maxSteps).toBe(30);
   });
 
   it("passes DeepSeek API key to model creation", async () => {
@@ -105,12 +106,12 @@ describe("runWeeklyAggregation", () => {
     expect(createDeepSeekModel).toHaveBeenCalledWith("sk-my-key");
   });
 
-  it("creates weekly agent tools with correct weekStartDate", async () => {
+  it("creates weekly agent tools with correct weekStartDate and model", async () => {
     const { createWeeklyAgentTools } = await import("./tools");
     const db = {} as unknown as D1Database;
     await runWeeklyAggregation(db, "sk-key", "2026-06-01");
 
-    expect(createWeeklyAgentTools).toHaveBeenCalledWith(db, "2026-06-01");
+    expect(createWeeklyAgentTools).toHaveBeenCalledWith(db, "2026-06-01", {});
   });
 
   it("uses the weekly system prompt", async () => {

@@ -22,9 +22,11 @@ Your tools and workflow:
 
 3. For the most significant products and trends, use webSearch to gather additional context — market positioning, recent news, competitor analysis, community reception. Use at least 3-5 webSearch calls.
 
-4. Use saveSiteSummary to save a weekly summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links. Synthesize the whole week's data — do not just repeat one day.
+4. Use searchImages to find a relevant image for every item in each site's weekly summary: call it ONCE per website with ALL item names from that site's summary and set website to that site. The tool automatically finds each item's page URL from the week's daily summaries and harvests its own image (GitHub repo preview card or the page's og:image); it falls back to search-engine images only when the item's page has none. Then pass the returned images into the corresponding saveSiteSummary call. Product names must stay in their original English form.
 
-5. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final weekly report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. Structure the report with sections:
+5. Use saveSiteSummary to save a weekly summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links. Also pass the images you got from searchImages (max 10, one per listed item). Synthesize the whole week's data — do not just repeat one day.
+
+6. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final weekly report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. Structure the report with sections:
    (a) Week Overview — key themes, products that gained traction, notable launches
    (b) Standout Products — 3-5 products that appeared repeatedly or showed strong momentum, with analysis
    (c) Cross-Domain Patterns — connections between PH launches, HN discussions, and GitHub activity
@@ -35,6 +37,7 @@ Report requirements:
 - Identify products that appeared on multiple platforms (e.g., launched on PH and trended on GitHub)
 - Focus on actionable insights for indie developers
 - Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
+- Each site summary SHOULD include a related image for up to 10 items, passed via the images field of saveSiteSummary
 - Use the webSearch tool to enrich your analysis with real-world context
 
 Translation rules for Chinese content (CRITICAL):
@@ -46,7 +49,7 @@ Translation rules for Chinese content (CRITICAL):
 
 IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls.`;
 
-export const WEEKLY_MAX_STEPS = 20;
+export const WEEKLY_MAX_STEPS = 30;
 
 const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
 
@@ -83,7 +86,7 @@ export async function runWeeklyAggregation(
   weekStartDate: string
 ): Promise<void> {
   const model = createDeepSeekModel(apiKey);
-  const tools = createWeeklyAgentTools(db, weekStartDate);
+  const tools = createWeeklyAgentTools(db, weekStartDate, model);
 
   console.log("[aggregate:weekly] Starting agent loop...");
   await generateText({

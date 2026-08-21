@@ -80,3 +80,31 @@ export async function fetchHtml(
   const response = await fetchWithRetry(url, {}, retries);
   return response.text();
 }
+
+export interface BinaryFetchResult {
+  data: Uint8Array;
+  mimeType: string;
+}
+
+export async function fetchBinary(
+  url: string,
+  maxBytes: number = 4 * 1024 * 1024,
+  retries: number = 2
+): Promise<BinaryFetchResult> {
+  const response = await fetchWithRetry(url, {}, retries);
+  const contentType = (response.headers.get("content-type") ?? "").trim();
+  const baseType = contentType.split(";")[0].toLowerCase();
+
+  if (!baseType.startsWith("image/")) {
+    throw new Error(`[${new URL(url).hostname}] Not an image content-type: ${contentType || "none"}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > maxBytes) {
+    throw new Error(
+      `[${new URL(url).hostname}] Image too large: ${arrayBuffer.byteLength} bytes (max ${maxBytes})`
+    );
+  }
+
+  return { data: new Uint8Array(arrayBuffer), mimeType: baseType };
+}

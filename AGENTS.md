@@ -37,7 +37,7 @@ Container Orchestrator (aggregator/container.ts)
 Container HTTP Server (container/server.ts)
   → Receives raw scraped data + DeepSeek API key via POST /aggregate
   → Creates in-memory agent tools (no D1 access needed)
-  → Runs LLM agent loop: getRawDataByWebsite → webSearch → saveSiteSummary → saveFinalReport
+  → Runs LLM agent loop: getRawDataByWebsite → webSearch → searchImages → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
 Orchestrator saves to D1 + performs post-aggregation validation (fillMissingSiteSummary)
@@ -67,7 +67,7 @@ Container Orchestrator (triggerWeeklyContainerAggregation)
       ↓
 Container HTTP Server (handleWeeklyAggregation)
   → Creates in-memory weekly agent tools (receives pre-loaded daily summaries)
-  → Runs weekly agent loop: getDailySummaries → webSearch → saveSiteSummary → saveFinalReport
+  → Runs weekly agent loop: getDailySummaries → webSearch → searchImages → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
 Orchestrator saves to weekly_summaries table + sends weekly email to subscribers
@@ -146,6 +146,7 @@ trend-catcher/
     │   ├── aggregate.ts       # Agent loop: runAggregation + fillMissingSiteSummary (shared, NO Workers-only imports)
     │   ├── weekly-aggregate.ts # Weekly agent loop: runWeeklyAgentLoop, runWeeklyAggregation
     │   ├── weekly-tools.ts    # Weekly agent tools (createWeeklyAgentTools, createInMemoryWeeklyAgentTools)
+    │   ├── image-search.ts    # Site-specific image extraction (og:image / GitHub repo preview) + DuckDuckGo image search and vision selection as fallback (shared, NO Workers-only imports)
     │   ├── container.ts       # Container orchestrator: triggerContainerAggregation + triggerWeeklyContainerAggregation
     │   └── search.ts          # DuckDuckGo HTML search (shared)
     ├── container/
@@ -238,7 +239,7 @@ npx vitest run                # Single run
 npx vitest run --coverage     # With coverage
 ```
 
-### Test Files (16 total)
+### Test Files (18 total)
 
 ```
 src/
@@ -254,6 +255,7 @@ src/
 │   ├── tools.test.ts
 │   ├── weekly-aggregate.test.ts
 │   ├── weekly-tools.test.ts
+│   ├── image-search.test.ts
 │   └── container.test.ts
 ├── routes/
 │   ├── home.test.tsx
@@ -264,7 +266,8 @@ src/
 ├── i18n/
 │   └── index.test.ts
 └── utils/
-    └── date.test.ts
+    ├── date.test.ts
+    └── fetcher.test.ts
 ```
 
 ### What to Test
@@ -430,4 +433,4 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 - **Product Hunt**: Homepage HTML is Cloudflare-protected. Use Atom RSS feed at `/feed` instead
 - **Hacker News**: Use official Firebase API (free, no auth, rate-limited at ~10k/hour)
 - **GitHub Trending**: Server-rendered HTML, parsed with cheerio
-- **DeepSeek**: Uses OpenAI-compatible API at `https://api.deepseek.com/v1`, model `deepseek-v4-flash`
+- **DeepSeek**: Uses OpenAI-compatible API at `https://api.deepseek.com/v1`, model `deepseek-v4-flash-vision-exp` (vision-capable)

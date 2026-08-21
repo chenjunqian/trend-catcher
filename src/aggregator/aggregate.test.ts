@@ -75,7 +75,7 @@ describe("runAggregation", () => {
 
     expect(callArgs.system).toBeTruthy();
     expect(callArgs.tools).toBeTruthy();
-    expect(callArgs.maxSteps).toBe(20);
+    expect(callArgs.maxSteps).toBe(30);
   });
 
   it("passes DeepSeek API key to model creation", async () => {
@@ -86,12 +86,12 @@ describe("runAggregation", () => {
     expect(createDeepSeekModel).toHaveBeenCalledWith("sk-my-key");
   });
 
-  it("creates agent tools with correct date", async () => {
+  it("creates agent tools with correct date and model", async () => {
     const { createAgentTools } = await import("./tools");
     const db = mockD1();
     await runAggregation(db, "sk-key", "2026-06-01");
 
-    expect(createAgentTools).toHaveBeenCalledWith(db, "2026-06-01");
+    expect(createAgentTools).toHaveBeenCalledWith(db, "2026-06-01", {});
   });
 
   it("has a static system prompt", async () => {
@@ -107,6 +107,8 @@ describe("runAggregation", () => {
     expect(callArgs.system).toContain("English");
     expect(callArgs.system).toContain("Chinese");
     expect(callArgs.system).toContain("webSearch");
+    expect(callArgs.system).toContain("searchImages");
+    expect(callArgs.system).toContain("images");
     expect(callArgs.system).toContain("up to 10");
     expect(callArgs.system).toContain("400-600");
     expect(callArgs.system).toContain("1500-3000");

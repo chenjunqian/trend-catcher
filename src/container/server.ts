@@ -49,7 +49,7 @@ async function handleDailyAggregation(req: IncomingMessage, res: ServerResponse)
     }
 
     const model = createDeepSeekModel(apiKey);
-    const { tools, getResults } = createInMemoryAgentTools(date, rawData);
+    const { tools, getResults } = createInMemoryAgentTools(date, rawData, model);
 
     console.log(`[container] Starting agent loop for ${date}`);
     await runAgentLoop(model, tools, SYSTEM_PROMPT, MAX_STEPS);
@@ -89,7 +89,7 @@ async function handleWeeklyAggregation(req: IncomingMessage, res: ServerResponse
     }
 
     const model = createDeepSeekModel(apiKey);
-    const { tools, getResults } = createInMemoryWeeklyAgentTools(weekStartDate, dailySummaries);
+    const { tools, getResults } = createInMemoryWeeklyAgentTools(weekStartDate, dailySummaries, model);
 
     console.log(`[container] Starting weekly agent loop for ${weekStartDate}`);
     await runWeeklyAgentLoop(model, tools, WEEKLY_SYSTEM_PROMPT, WEEKLY_MAX_STEPS);

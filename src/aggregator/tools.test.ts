@@ -1,15 +1,39 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ToolExecutionOptions } from "ai";
-import { createAgentTools } from "./tools";
+import { createAgentTools, createInMemoryAgentTools } from "./tools";
 import { newStmt, mockD1 } from "../test-utils/d1-mock";
 
 vi.mock("./search", () => ({
   searchWeb: vi.fn(),
 }));
 
+vi.mock("./image-search", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./image-search")>();
+  return {
+    ...actual,
+    searchImages: vi.fn(),
+    selectBestImage: vi.fn(),
+    resolveItemImage: vi.fn(),
+  };
+});
+
 import { searchWeb } from "./search";
+import { searchImages, selectBestImage, resolveItemImage } from "./image-search";
 
 const execOpts = {} as ToolExecutionOptions;
+
+const date = "2026-06-01";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+const arcCandidate = {
+  title: "Arc Browser",
+  thumbnail: "https://thumbs.example.com/arc.jpg",
+  image: "https://example.com/arc.jpg",
+  sourceUrl: "https://arc.net",
+};
 
 describe("createAgentTools", () => {
   const date = "2026-06-01";
@@ -148,5 +172,225 @@ describe("createAgentTools", () => {
       }, execOpts);
       expect(result.success).toBe(true);
     });
+  });
+});
+
+describe("saveSiteSummary with images", () => {
+  it("persists images alongside the summary", async () => {
+    const s = newStmt();
+    s.first.mockResolvedValue(null);
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+    await tools.saveSiteSummary.execute({
+      website: "producthunt",
+      summaryEn: "PH EN",
+      summaryZh: "PH ZH",
+      images: [{ name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" }],
+    }, execOpts);
+
+    const jsonArg = s.bind.mock.calls
+      .flat()
+      .find((a) => typeof a === "string" && a.includes('"images"'));
+    expect(jsonArg).toBeTruthy();
+    const parsed = JSON.parse(jsonArg as string);
+    expect(parsed.producthunt.images).toEqual([
+      { name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" },
+    ]);
+  });
+
+  it("omits the images key when no images are provided", async () => {
+    const s = newStmt();
+    s.first.mockResolvedValue(null);
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+    await tools.saveSiteSummary.execute({
+      website: "github",
+      summaryEn: "GH EN",
+      summaryZh: "GH ZH",
+    }, execOpts);
+
+    const jsonArg = s.bind.mock.calls
+      .flat()
+      .find((a) => typeof a === "string" && a.includes('"github"'));
+    const parsed = JSON.parse(jsonArg as string);
+    expect(parsed.github.images).toBeUndefined();
+  });
+});
+
+describe("searchImages tool", () => {
+  it("returns selected images for each item", async () => {
+    const m = mockD1();
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+
+    vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+    vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }, { name: "Cursor" }] },
+      execOpts
+    );
+
+    expect(result.images).toEqual([
+      { name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" },
+      { name: "Cursor", url: "https://thumbs.example.com/arc.jpg" },
+    ]);
+    expect(result.totalFound).toBe(2);
+    expect(selectBestImage).toHaveBeenCalledTimes(2);
+    expect(selectBestImage).toHaveBeenNthCalledWith(
+      1,
+      null,
+      "Arc Browser",
+      expect.any(Array)
+    );
+  });
+
+  it("uses the item's own image from the scraped data", async () => {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [
+        { raw_data: JSON.stringify([{ name: "Arc Browser", link: "https://ph.example.com/arc" }]) },
+      ],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+
+    vi.mocked(resolveItemImage).mockResolvedValue("https://own.example.com/arc.jpg");
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+
+    expect(resolveItemImage).toHaveBeenCalledWith("https://ph.example.com/arc");
+    expect(result.images).toEqual([
+      { name: "Arc Browser", url: "https://own.example.com/arc.jpg" },
+    ]);
+    expect(selectBestImage).not.toHaveBeenCalled();
+    expect(searchImages).not.toHaveBeenCalled();
+  });
+
+  it("falls back to engine search when the item has no own image", async () => {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [{ raw_data: JSON.stringify([{ name: "Arc Browser", link: "https://ph.example.com/arc" }]) }],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+
+    vi.mocked(resolveItemImage).mockResolvedValue(null);
+    vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+    vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+
+    expect(resolveItemImage).toHaveBeenCalledWith("https://ph.example.com/arc");
+    expect(selectBestImage).toHaveBeenCalledTimes(1);
+    expect(result.images).toEqual([
+      { name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" },
+    ]);
+  });
+
+  it("passes the vision model through to selection", async () => {
+    const m = mockD1();
+    const db = m as unknown as D1Database;
+    const fakeModel = { modelId: "vision" } as never;
+    const tools = createAgentTools(db, date, fakeModel);
+
+    vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+    vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+    await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+    expect(selectBestImage).toHaveBeenCalledWith(
+      fakeModel,
+      "Arc Browser",
+      expect.any(Array)
+    );
+  });
+
+  it("omits items with no usable image", async () => {
+    const m = mockD1();
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+
+    vi.mocked(searchImages).mockResolvedValue([]);
+    vi.mocked(selectBestImage).mockResolvedValue(null);
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Nope" }] },
+      execOpts
+    );
+    expect(result.images).toEqual([]);
+    expect(result.totalFound).toBe(0);
+  });
+
+  it("does not throw when image search fails", async () => {
+    const m = mockD1();
+    const db = m as unknown as D1Database;
+    const tools = createAgentTools(db, date);
+
+    vi.mocked(searchImages).mockRejectedValueOnce(new Error("ddg down"));
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc" }] },
+      execOpts
+    );
+    expect(result.images).toEqual([]);
+  });
+});
+
+describe("createInMemoryAgentTools", () => {
+  it("keeps images in site summary results", async () => {
+    const { tools, getResults } = createInMemoryAgentTools(date, {});
+    await tools.saveSiteSummary.execute({
+      website: "github",
+      summaryEn: "GH EN",
+      summaryZh: "GH ZH",
+      images: [{ name: "repo", url: "https://thumbs.example.com/r.jpg" }],
+    }, execOpts);
+
+    expect(getResults().siteSummaries.github.images).toEqual([
+      { name: "repo", url: "https://thumbs.example.com/r.jpg" },
+    ]);
+  });
+
+  it("exposes a searchImages tool", async () => {
+    const { tools } = createInMemoryAgentTools(date, {});
+    vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+    vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+    expect(result.images).toHaveLength(1);
+  });
+
+  it("resolves the item URL from the in-memory raw data", async () => {
+    const { tools } = createInMemoryAgentTools(date, {
+      producthunt: [{ name: "Arc Browser", link: "https://ph.example.com/arc" }],
+    });
+    vi.mocked(resolveItemImage).mockResolvedValue("https://own.example.com/arc.jpg");
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+
+    expect(resolveItemImage).toHaveBeenCalledWith("https://ph.example.com/arc");
+    expect(result.images).toEqual([
+      { name: "Arc Browser", url: "https://own.example.com/arc.jpg" },
+    ]);
+    expect(searchImages).not.toHaveBeenCalled();
   });
 });

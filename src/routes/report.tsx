@@ -2,7 +2,7 @@ import type { FC } from "hono/jsx";
 import type { DailySummary, WeeklySummary } from "../db/client";
 import type { Lang } from "../i18n";
 import { t, switchLang } from "../i18n";
-import type { SiteSummaryEntry } from "../aggregator/tools";
+import type { SiteImage, SiteSummaryEntry } from "../aggregator/tools";
 import Layout from "./layout";
 import { renderMarkdown } from "./markdown";
 
@@ -20,6 +20,70 @@ function parseSiteSummaries(raw: string): Record<string, SiteSummaryEntry> {
     return {};
   }
 }
+
+function parseSiteImages(entry: SiteSummaryEntry | undefined): SiteImage[] {
+  if (!entry || !Array.isArray(entry.images)) return [];
+  return entry.images.filter(
+    (img): img is SiteImage =>
+      !!img &&
+      typeof img.name === "string" &&
+      typeof img.url === "string" &&
+      img.url.startsWith("http")
+  );
+}
+
+function extractItemLinks(md: string): Array<{ name: string; url: string }> {
+  const links: Array<{ name: string; url: string }> = [];
+  const regex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(md)) !== null) {
+    links.push({ name: match[1].trim(), url: match[2].trim() });
+  }
+  return links;
+}
+
+function findItemUrl(entry: SiteSummaryEntry, name: string): string | undefined {
+  const links = [...extractItemLinks(entry.en), ...extractItemLinks(entry.zh)];
+  const target = name.trim().toLowerCase();
+  if (!target) return undefined;
+  const exact = links.find((link) => link.name.trim().toLowerCase() === target);
+  if (exact) return exact.url;
+  const partial = links.find((link) => {
+    const candidate = link.name.trim().toLowerCase();
+    return (
+      candidate.length >= 3 &&
+      target.length >= 3 &&
+      (candidate.includes(target) || target.includes(candidate))
+    );
+  });
+  return partial?.url;
+}
+
+const SiteGallery: FC<{ entry: SiteSummaryEntry }> = ({ entry }) => {
+  const images = parseSiteImages(entry);
+  if (images.length === 0) return null;
+
+  return (
+    <div class="site-gallery">
+      {images.map((img) => {
+        const itemUrl = findItemUrl(entry, img.name);
+        return (
+          <figure class="site-image" key={`${img.name}-${img.url}`}>
+            <img
+              src={img.url}
+              alt={img.name}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+            <figcaption>
+              {itemUrl ? <a href={itemUrl}>{img.name}</a> : img.name}
+            </figcaption>
+          </figure>
+        );
+      })}
+    </div>
+  );
+};
 
 const SITE_LABELS: Record<string, string> = {
   producthunt: "Product Hunt",
@@ -68,6 +132,7 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
                   className="column-body"
                   html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)}
                 />
+                <SiteGallery entry={entry} />
               </div>
             ))}
           </div>

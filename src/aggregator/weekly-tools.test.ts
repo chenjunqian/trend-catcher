@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ToolExecutionOptions } from "ai";
 import { createWeeklyAgentTools } from "./tools";
 import { createInMemoryWeeklyAgentTools } from "./tools";
@@ -8,9 +8,31 @@ vi.mock("./search", () => ({
   searchWeb: vi.fn(),
 }));
 
+vi.mock("./image-search", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./image-search")>();
+  return {
+    ...actual,
+    searchImages: vi.fn(),
+    selectBestImage: vi.fn(),
+    resolveItemImage: vi.fn(),
+  };
+});
+
 import { searchWeb } from "./search";
+import { searchImages, selectBestImage, resolveItemImage } from "./image-search";
 
 const execOpts = {} as ToolExecutionOptions;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+const arcCandidate = {
+  title: "Arc Browser",
+  thumbnail: "https://thumbs.example.com/arc.jpg",
+  image: "https://example.com/arc.jpg",
+  sourceUrl: "https://arc.net",
+};
 
 const sampleDailySummaries = [
   {
@@ -245,5 +267,158 @@ describe("createWeeklyAgentTools", () => {
 
       expect(result.success).toBe(true);
     });
+  });
+
+  describe("searchImages", () => {
+    it("returns selected images for each item", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createWeeklyAgentTools(db, weekStartDate);
+
+      vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+      vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+      const result = await tools.searchImages.execute(
+        { website: "producthunt", items: [{ name: "Arc Browser" }] },
+        execOpts
+      );
+      expect(result.images).toEqual([
+        { name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" },
+      ]);
+      expect(result.totalFound).toBe(1);
+    });
+
+    it("uses the item's own image found in the daily summaries", async () => {
+      const s = newStmt();
+      s.all.mockResolvedValue({
+        results: [
+          {
+            summary_date: "2026-06-01",
+            site_summaries: JSON.stringify({
+              producthunt: {
+                en: "- [AI] [Arc Browser](https://ph.example.com/arc) — a browser",
+                zh: "- [AI] [Arc Browser](https://ph.example.com/arc) — 浏览器",
+              },
+            }),
+          },
+        ],
+      });
+      const m = mockD1(s);
+      const db = m as unknown as D1Database;
+      const tools = createWeeklyAgentTools(db, weekStartDate);
+
+      vi.mocked(resolveItemImage).mockResolvedValue("https://own.example.com/arc.jpg");
+
+      const result = await tools.searchImages.execute(
+        { website: "producthunt", items: [{ name: "Arc Browser" }] },
+        execOpts
+      );
+
+      expect(resolveItemImage).toHaveBeenCalledWith("https://ph.example.com/arc");
+      expect(result.images).toEqual([
+        { name: "Arc Browser", url: "https://own.example.com/arc.jpg" },
+      ]);
+      expect(searchImages).not.toHaveBeenCalled();
+    });
+
+    it("omits items with no usable image", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createWeeklyAgentTools(db, weekStartDate);
+
+      vi.mocked(searchImages).mockResolvedValue([]);
+      vi.mocked(selectBestImage).mockResolvedValue(null);
+
+      const result = await tools.searchImages.execute(
+        { website: "producthunt", items: [{ name: "Nope" }] },
+        execOpts
+      );
+      expect(result.images).toEqual([]);
+      expect(result.totalFound).toBe(0);
+    });
+  });
+
+  describe("saveSiteSummary with images", () => {
+    it("persists images alongside the weekly summary", async () => {
+      const s = newStmt();
+      s.first.mockResolvedValue(null);
+      const m = mockD1(s);
+      const db = m as unknown as D1Database;
+      const tools = createWeeklyAgentTools(db, weekStartDate);
+
+      await tools.saveSiteSummary.execute({
+        website: "producthunt",
+        summaryEn: "PH weekly EN",
+        summaryZh: "PH weekly ZH",
+        images: [{ name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" }],
+      }, execOpts);
+
+      const jsonArg = s.bind.mock.calls
+        .flat()
+        .find((a) => typeof a === "string" && a.includes('"images"'));
+      expect(jsonArg).toBeTruthy();
+      const parsed = JSON.parse(jsonArg as string);
+      expect(parsed.producthunt.images).toEqual([
+        { name: "Arc Browser", url: "https://thumbs.example.com/arc.jpg" },
+      ]);
+    });
+  });
+});
+
+describe("createInMemoryWeeklyAgentTools with images", () => {
+  const weekStartDate = "2026-06-01";
+
+  it("keeps images in site summary results", async () => {
+    const { tools, getResults } = createInMemoryWeeklyAgentTools(weekStartDate, []);
+    await tools.saveSiteSummary.execute({
+      website: "github",
+      summaryEn: "GH weekly EN",
+      summaryZh: "GH weekly ZH",
+      images: [{ name: "repo", url: "https://thumbs.example.com/r.jpg" }],
+    }, execOpts);
+
+    expect(getResults().siteSummaries.github.images).toEqual([
+      { name: "repo", url: "https://thumbs.example.com/r.jpg" },
+    ]);
+  });
+
+  it("exposes a searchImages tool", async () => {
+    const { tools } = createInMemoryWeeklyAgentTools(weekStartDate, []);
+    vi.mocked(searchImages).mockResolvedValue([arcCandidate]);
+    vi.mocked(selectBestImage).mockResolvedValue(arcCandidate);
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+    expect(result.images).toHaveLength(1);
+  });
+
+  it("resolves the item URL from the in-memory daily summaries", async () => {
+    const { tools } = createInMemoryWeeklyAgentTools(weekStartDate, [
+      {
+        summary_date: "2026-06-01",
+        full_report_en: "",
+        full_report_zh: "",
+        site_summaries: JSON.stringify({
+          producthunt: {
+            en: "- [AI] [Arc Browser](https://ph.example.com/arc) — a browser",
+            zh: "- [AI] [Arc Browser](https://ph.example.com/arc) — 浏览器",
+          },
+        }),
+      },
+    ]);
+    vi.mocked(resolveItemImage).mockResolvedValue("https://own.example.com/arc.jpg");
+
+    const result = await tools.searchImages.execute(
+      { website: "producthunt", items: [{ name: "Arc Browser" }] },
+      execOpts
+    );
+
+    expect(resolveItemImage).toHaveBeenCalledWith("https://ph.example.com/arc");
+    expect(result.images).toEqual([
+      { name: "Arc Browser", url: "https://own.example.com/arc.jpg" },
+    ]);
+    expect(searchImages).not.toHaveBeenCalled();
   });
 });
