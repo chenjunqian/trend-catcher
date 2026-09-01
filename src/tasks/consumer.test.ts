@@ -9,7 +9,23 @@ vi.mock("../aggregator/container", () => ({
   triggerWeeklyContainerAggregation: vi.fn(),
 }));
 
+vi.mock("../aggregator/aggregate", () => ({
+  runAggregation: vi.fn(),
+}));
+
+vi.mock("../aggregator/weekly-aggregate", () => ({
+  runWeeklyAggregation: vi.fn(),
+}));
+
+vi.mock("../notifier/email", () => ({
+  sendDailyEmail: vi.fn(),
+  sendWeeklyEmail: vi.fn(),
+}));
+
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
+import { runAggregation } from "../aggregator/aggregate";
+import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
+import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 
 function makeMsg(body: TaskMessage) {
   return {
@@ -89,6 +105,26 @@ describe("queueConsumer — manual-daily messages", () => {
 
     expect(triggerWeeklyContainerAggregation).not.toHaveBeenCalled();
   });
+
+  it("falls back to direct Worker aggregation when container aggregation fails", async () => {
+    vi.mocked(triggerContainerAggregation).mockRejectedValueOnce(new Error("Container failed"));
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-14_daily",
+      scheduled_date: "2026-06-14",
+      website: "daily",
+      item: "aggregate",
+      type: "manual-daily",
+    };
+
+    const env = mockEnv();
+    const batch = makeBatch([makeMsg(msg)]);
+
+    await queueConsumer(batch, env, mockCtx());
+
+    expect(runAggregation).toHaveBeenCalledWith(env.DB, "sk-test", "2026-06-14");
+    expect(sendDailyEmail).toHaveBeenCalled();
+  });
 });
 
 describe("queueConsumer — manual-weekly messages", () => {
@@ -133,6 +169,26 @@ describe("queueConsumer — manual-weekly messages", () => {
     await queueConsumer(batch, env, mockCtx());
 
     expect(triggerContainerAggregation).not.toHaveBeenCalled();
+  });
+
+  it("falls back to direct Worker weekly aggregation when weekly container aggregation fails", async () => {
+    vi.mocked(triggerWeeklyContainerAggregation).mockRejectedValueOnce(new Error("Weekly container failed"));
+
+    const msg: TaskMessage = {
+      id: "manual_2026-06-08_weekly",
+      scheduled_date: "2026-06-08",
+      website: "weekly",
+      item: "aggregate",
+      type: "manual-weekly",
+    };
+
+    const env = mockEnv();
+    const batch = makeBatch([makeMsg(msg)]);
+
+    await queueConsumer(batch, env, mockCtx());
+
+    expect(runWeeklyAggregation).toHaveBeenCalledWith(env.DB, "sk-test", "2026-06-08");
+    expect(sendWeeklyEmail).toHaveBeenCalled();
   });
 });
 

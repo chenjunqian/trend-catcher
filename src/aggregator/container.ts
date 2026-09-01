@@ -9,6 +9,55 @@ import {
 import { getDateRangeForWeek } from "../utils/date";
 import type { EmailSender } from "../notifier/email";
 
+function isNonRetryableError(errorText: string): boolean {
+  return (
+    errorText.includes("Container service disconnected") ||
+    errorText.includes("Container port connection closed unexpectedly") ||
+    errorText.includes("connection closed unexpectedly")
+  );
+}
+
+async function fetchContainerWithRetry(
+  container: ReturnType<typeof getContainer>,
+  request: Request,
+  logPrefix: string,
+  errorLabel: string
+): Promise<Response> {
+  let containerResp: Response | undefined;
+  let lastError = "";
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const delay = attempt === 0 ? 0 : Math.pow(2, attempt) * 1000;
+    if (delay > 0) {
+      console.log(`[${logPrefix}] Retry ${attempt}/${5}, waiting ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const attemptStart = Date.now();
+    try {
+      containerResp = await container.fetch(request.clone());
+      if (containerResp.ok) break;
+      const errText = await containerResp.text();
+      lastError = `HTTP ${containerResp.status}: ${errText.slice(0, 200)}`;
+      console.log(`[${logPrefix}] Attempt ${attempt}: ${lastError}`);
+    } catch (err) {
+      lastError = (err as Error).message;
+      console.log(`[${logPrefix}] Attempt ${attempt}: ${lastError}`);
+    }
+
+    if (isNonRetryableError(lastError) || (Date.now() - attemptStart > 30_000 && !containerResp?.ok)) {
+      console.log(`[${logPrefix}] Aborting retries: ${lastError}`);
+      break;
+    }
+  }
+
+  if (!containerResp?.ok) {
+    throw new Error(`${errorLabel} failed after retries: ${lastError}`);
+  }
+
+  return containerResp;
+}
+
 export async function triggerContainerAggregation(
   db: D1Database,
   containerBinding: unknown,
@@ -46,31 +95,12 @@ export async function triggerContainerAggregation(
     body: JSON.stringify({ date, rawData, apiKey: deepseekApiKey }),
   });
 
-  let containerResp: Response | undefined;
-  let lastError = "";
-
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const delay = attempt === 0 ? 0 : Math.pow(2, attempt) * 1000;
-    if (delay > 0) {
-      console.log(`[container-orch] Retry ${attempt}/${5}, waiting ${delay}ms...`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-
-    try {
-      containerResp = await container.fetch(request.clone());
-      if (containerResp.ok) break;
-      const errText = await containerResp.text();
-      lastError = `HTTP ${containerResp.status}: ${errText.slice(0, 200)}`;
-      console.log(`[container-orch] Attempt ${attempt}: ${lastError}`);
-    } catch (err) {
-      lastError = (err as Error).message;
-      console.log(`[container-orch] Attempt ${attempt}: ${lastError}`);
-    }
-  }
-
-  if (!containerResp?.ok) {
-    throw new Error(`Container aggregation failed after retries: ${lastError}`);
-  }
+  const containerResp = await fetchContainerWithRetry(
+    container,
+    request,
+    "container-orch",
+    "Container aggregation"
+  );
 
   const containerResult = (await containerResp.json()) as {
     success: boolean;
@@ -132,31 +162,12 @@ export async function triggerWeeklyContainerAggregation(
     body: JSON.stringify({ weekStartDate, dailySummaries, apiKey: deepseekApiKey }),
   });
 
-  let containerResp: Response | undefined;
-  let lastError = "";
-
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const delay = attempt === 0 ? 0 : Math.pow(2, attempt) * 1000;
-    if (delay > 0) {
-      console.log(`[container-orch:weekly] Retry ${attempt}/${5}, waiting ${delay}ms...`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-
-    try {
-      containerResp = await container.fetch(request.clone());
-      if (containerResp.ok) break;
-      const errText = await containerResp.text();
-      lastError = `HTTP ${containerResp.status}: ${errText.slice(0, 200)}`;
-      console.log(`[container-orch:weekly] Attempt ${attempt}: ${lastError}`);
-    } catch (err) {
-      lastError = (err as Error).message;
-      console.log(`[container-orch:weekly] Attempt ${attempt}: ${lastError}`);
-    }
-  }
-
-  if (!containerResp?.ok) {
-    throw new Error(`Weekly container aggregation failed after retries: ${lastError}`);
-  }
+  const containerResp = await fetchContainerWithRetry(
+    container,
+    request,
+    "container-orch:weekly",
+    "Weekly container aggregation"
+  );
 
   const containerResult = (await containerResp.json()) as {
     success: boolean;
