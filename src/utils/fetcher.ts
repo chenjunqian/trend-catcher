@@ -75,8 +75,9 @@ export async function fetchJson<T>(
 
 export async function fetchHtml(
   url: string,
-  retries: number = 3
+  retries: number = 3,
+  timeoutMs: number = 15000
 ): Promise<string> {
-  const response = await fetchWithRetry(url, {}, retries);
+  const response = await fetchWithRetry(url, {}, retries, timeoutMs);
   return response.text();
 }

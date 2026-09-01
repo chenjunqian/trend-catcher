@@ -423,7 +423,7 @@ This runs `scripts/test-scrapers.ts` which tests all three scrapers against live
 - **Cloudflare free tier**: Cron trigger must finish within 10ms CPU (only enqueue tasks, no I/O)
 - **Queue consumer**: Up to 5-minute execution window — scrapers + aggregation run here
 - **Container isolation**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import `@cloudflare/containers` or `cloudflare:workers` — these modules don't exist in Node.js. The container server crashes on import if this is violated.
-- **Container resources**: 0.0625 vCPU / 256 MiB — minimal; LLM tasks are network-I/O bound so this is sufficient.
+- **Container resources**: basic instance type (0.25 vCPU / 1 GiB RAM) to support Node.js Cheerio parsing and LLM agent memory requirements.
 - **Container networking**: Private mode — Docker image must have all dependencies pre-installed (no runtime `npm install`/`npx` downloads).
 - **Container port**: 4000 (set via `defaultPort = 4000` on AggregatorContainer DO class).
 - **Cheerio in Workers**: Requires `nodejs_compat` compatibility flag

@@ -66,7 +66,7 @@ function createWebfetchTool(logPrefix: string) {
       console.log(`${logPrefix} webfetch: ${url.slice(0, 120)}`);
 
       try {
-        const html = await fetchHtml(url, 2);
+        const html = await fetchHtml(url, 1, 8000);
         const $ = cheerio.load(html);
 
         $("script, style, nav, footer, header, noscript").remove();

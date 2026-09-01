@@ -10,9 +10,9 @@ vi.mock("../notifier/email", () => ({
 }));
 
 import { getContainer } from "@cloudflare/containers";
-import { triggerWeeklyContainerAggregation } from "./container";
+import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "./container";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
-import { sendWeeklyEmail } from "../notifier/email";
+import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import type { EmailSender } from "../notifier/email";
 
 function mockEmailSender(): EmailSender {
@@ -220,4 +220,55 @@ describe("triggerWeeklyContainerAggregation", () => {
       db, emailSender, weekStartDate, "https://trendcatcher.guoshaotech.com"
     );
   });
+
+  it("aborts retries immediately when container service disconnects", async () => {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [{
+        summary_date: "2026-06-01",
+        full_report_en: "R",
+        full_report_zh: "R",
+        site_summaries: "{}",
+      }],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+
+    const containerBinding = {};
+    const stub = { fetch: vi.fn().mockRejectedValue(new Error("Container service disconnected.")) };
+    vi.mocked(getContainer).mockReturnValue(stub as any);
+
+    await expect(
+      triggerWeeklyContainerAggregation(
+        db, containerBinding, emailSender, weekStartDate, deepseekApiKey
+      )
+    ).rejects.toThrow("Container service disconnected");
+
+    expect(stub.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts daily aggregation retries immediately when container port connection closed unexpectedly", async () => {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [{
+        raw_data: JSON.stringify({ title: "item" }),
+        website: "producthunt",
+      }],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+
+    const containerBinding = {};
+    const stub = { fetch: vi.fn().mockRejectedValue(new Error("Container port connection closed unexpectedly.")) };
+    vi.mocked(getContainer).mockReturnValue(stub as any);
+
+    await expect(
+      triggerContainerAggregation(
+        db, containerBinding, emailSender, "2026-06-01", deepseekApiKey
+      )
+    ).rejects.toThrow("Container port connection closed unexpectedly");
+
+    expect(stub.fetch).toHaveBeenCalledTimes(1);
+  });
 });
+

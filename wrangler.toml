@@ -43,6 +43,7 @@ remote = true
 max_instances = 1
 class_name = "AggregatorContainer"
 image = "./Dockerfile"
+instance_type = "basic"
 
 [[durable_objects.bindings]]
 name = "AGGREGATOR_CONTAINER"

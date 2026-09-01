@@ -25,7 +25,7 @@ export async function searchWeb(query: string): Promise<SearchResult[]> {
   const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
 
   try {
-    const html = await fetchHtml(url, 1);
+    const html = await fetchHtml(url, 1, 8000);
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 

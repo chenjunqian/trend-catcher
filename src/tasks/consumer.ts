@@ -11,6 +11,9 @@ import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
+import { runAggregation } from "../aggregator/aggregate";
+import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
+import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import type { TaskMessage } from "./generator";
 
 export interface Env {
@@ -158,7 +161,13 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
       env.DEEPSEEK_API_KEY
     );
   } catch (err) {
-    console.error("Aggregation failed:", err);
+    console.error("Container aggregation failed, falling back to direct Worker aggregation:", err);
+    try {
+      await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
+      await sendDailyEmail(env.DB, env.EMAIL, date, BASE_URL);
+    } catch (fallbackErr) {
+      console.error("Fallback aggregation failed:", fallbackErr);
+    }
   }
 }
 
@@ -174,6 +183,12 @@ async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promis
       env.DEEPSEEK_API_KEY
     );
   } catch (err) {
-    console.error("Weekly aggregation failed:", err);
+    console.error("Weekly container aggregation failed, falling back to direct Worker weekly aggregation:", err);
+    try {
+      await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
+      await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
+    } catch (fallbackErr) {
+      console.error("Fallback weekly aggregation failed:", fallbackErr);
+    }
   }
 }
