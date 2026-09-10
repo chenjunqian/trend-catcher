@@ -77,6 +77,24 @@ describe("weekly i18n keys", () => {
   });
 });
 
+describe("kami screen keys", () => {
+  const keys = [
+    "home.eyebrow",
+    "offline.title",
+    "offline.body",
+    "offline.retry",
+    "not_found.title",
+    "not_found.body",
+  ];
+
+  it("exist in both languages", () => {
+    for (const key of keys) {
+      expect(t("en", key)).not.toBe(key);
+      expect(t("zh", key)).not.toBe(key);
+    }
+  });
+});
+
 describe("detectLang", () => {
   function makeRequest(url: string, acceptLang?: string): Request {
     const headers = new Headers();

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "kami": {
+      "source": "tw93/kami",
+      "sourceType": "github",
+      "skillPath": "skills/kami/SKILL.md",
+      "computedHash": "0c53f07b1d56b2ba11cfd89c1cf6e8d47e7c8a682d2c5588d7b478d1cd014007"
+    }
+  }
+}

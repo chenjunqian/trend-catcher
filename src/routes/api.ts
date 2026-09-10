@@ -56,7 +56,7 @@ api.post("/api/subscribe", async (c) => {
       to: email,
       from: { email: "trendcatcher@guoshaotech.com", name: "Trend Catcher" },
       subject: t(lang, "email.confirm_subject"),
-      html: `<p>${lang === "zh" ? "请点击以下链接确认订阅猎趋：" : "Please click the link below to confirm your subscription:"}</p><p><a href="${confirmUrl}">${confirmUrl}</a></p>`,
+      html: `<div style="font-family: Charter, Georgia, 'TsangerJinKai02', 'Source Han Serif SC', 'Songti SC', Georgia, serif; background: #f5f4ed; color: #141413; padding: 24px; line-height: 1.55;"><p style="margin: 0 0 12px;">${lang === "zh" ? "请点击以下链接确认订阅猎趋：" : "Please click the link below to confirm your subscription:"}</p><p style="margin: 0;"><a href="${confirmUrl}" style="color: #1B365D;">${confirmUrl}</a></p></div>`,
       text: `${lang === "zh" ? "请点击以下链接确认订阅猎趋：" : "Please click the link below to confirm your subscription:"} ${confirmUrl}`,
     });
   } catch (err) {

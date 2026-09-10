@@ -19,12 +19,12 @@ describe("manifest", () => {
     expect(manifest.display).toBe("standalone");
   });
 
-  it("has theme_color set", () => {
-    expect(manifest.theme_color).toBe("#ffffff");
+  it("has theme_color set to kami parchment", () => {
+    expect(manifest.theme_color).toBe("#f5f4ed");
   });
 
-  it("has background_color set", () => {
-    expect(manifest.background_color).toBe("#ffffff");
+  it("has background_color set to kami parchment", () => {
+    expect(manifest.background_color).toBe("#f5f4ed");
   });
 
   it("has at least one icon", () => {
