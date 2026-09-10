@@ -1,7 +1,7 @@
 import type { FC } from "hono/jsx";
 import type { DailySummary, WeeklySummary } from "../db/client";
 import type { Lang } from "../i18n";
-import { t, switchLang } from "../i18n";
+import { t } from "../i18n";
 import type { SiteSummaryEntry } from "../aggregator/tools";
 import Layout from "./layout";
 import { renderMarkdown } from "./markdown";
@@ -34,7 +34,6 @@ function getReportDate(summary: DailySummary | WeeklySummary, isWeekly?: boolean
 
 const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
   const siteSummaries = parseSiteSummaries(summary.site_summaries);
-  const altLang = switchLang(lang);
   const displayDate = getReportDate(summary, isWeekly);
 
   return (
@@ -43,64 +42,45 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
         {t(lang, "report.back")}
       </a>
 
-      <div class="story-head">
-        <h2 class="story-title">
-          {displayDate}
-          <span class="story-type">
-            {t(lang, isWeekly ? "report.weekly_heading" : "report.heading")}
-          </span>
-        </h2>
-      </div>
+      <header class="report-head">
+        <p class="eyebrow">
+          {t(lang, isWeekly ? "report.weekly_heading" : "report.heading")}
+        </p>
+        <h1 class="report-date">{displayDate}</h1>
+      </header>
 
       {Object.keys(siteSummaries).length > 0 && (
         <section>
-          <h3 class="section-title">
+          <h2 class="section-title">
             {t(lang, "report.site_summaries")}
-          </h3>
-          <div class="columns">
+          </h2>
+          <div class="site-grid">
             {Object.entries(siteSummaries).map(([website, entry]) => (
-              <div class="column" key={website}>
-                <div class="column-head">
-                  <span class="column-name">{SITE_LABELS[website] || website}</span>
-                  <span class="badge">{website}</span>
-                </div>
+              <article class="site-card" key={website}>
+                <h3 class="site-name">{SITE_LABELS[website] || website}</h3>
                 <ReportContent
-                  className="column-body"
+                  className="site-body"
                   html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)}
                 />
-              </div>
+              </article>
             ))}
           </div>
         </section>
       )}
 
-      <div class="report">
-        {lang === "en" && (
-          <div class="lang-section">
-            <h2>
-              {t(lang, "report.overall")}
-            </h2>
-            {summary.full_report_en ? (
-              <ReportContent className="report-body" html={renderMarkdown(summary.full_report_en)} />
-            ) : (
-              <p class="report-empty">{t(lang, "report.empty")}</p>
-            )}
-          </div>
-        )}
-
-        {lang === "zh" && (
-          <div class="lang-section">
-            <h2>
-              {t(lang, "report.overall")}
-            </h2>
-            {summary.full_report_zh ? (
-              <ReportContent className="report-body" html={renderMarkdown(summary.full_report_zh)} />
-            ) : (
-              <p class="report-empty">{t(lang, "report.empty")}</p>
-            )}
-          </div>
-        )}
-      </div>
+      <section class="report-section">
+        <h2 class="section-title">
+          {t(lang, "report.overall")}
+        </h2>
+        {(() => {
+          const report = lang === "zh" ? summary.full_report_zh : summary.full_report_en;
+          return report ? (
+            <ReportContent className="report-body" html={renderMarkdown(report)} />
+          ) : (
+            <p class="report-empty">{t(lang, "report.empty")}</p>
+          );
+        })()}
+      </section>
     </Layout>
   );
 };

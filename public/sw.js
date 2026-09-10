@@ -1,4 +1,4 @@
-const CACHE = "trend-catcher-v2";
+const CACHE = "trend-catcher-v3";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {

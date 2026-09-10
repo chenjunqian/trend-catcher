@@ -1,10 +1,16 @@
 import { Hono } from "hono";
 import Home from "./home";
 import Report from "./report";
-import { ConfirmPage, UnsubscribePage, UnsubscribeSuccessPage, NotFoundPage } from "./newsletter";
+import {
+  ConfirmPage,
+  UnsubscribePage,
+  UnsubscribeSuccessPage,
+  NotFoundPage,
+  OfflinePage,
+} from "./newsletter";
 import { getSummaryByDate, getWeeklySummaryByDate, getHomeTimeline } from "../db/client";
 import { confirmSubscription, unsubscribeByToken, getSubscriberByToken } from "../db/client";
-import { detectLang } from "../i18n";
+import { detectLang, t } from "../i18n";
 import { manifest } from "../pwa/manifest";
 import type { Bindings } from "../index";
 
@@ -64,12 +70,26 @@ pages.get("/api/confirm", async (c) => {
 
   const token = c.req.query("token") ?? "";
   if (!token) {
-    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    return c.html(
+      <NotFoundPage
+        lang={lang}
+        path={c.req.path}
+        message={t(lang, "newsletter.not_found")}
+      />,
+      404
+    );
   }
 
   const result = await confirmSubscription(DB, token);
   if (!result.meta.changes) {
-    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    return c.html(
+      <NotFoundPage
+        lang={lang}
+        path={c.req.path}
+        message={t(lang, "newsletter.not_found")}
+      />,
+      404
+    );
   }
 
   return c.html(<ConfirmPage lang={lang} path={c.req.path} />);
@@ -81,12 +101,26 @@ pages.get("/unsubscribe", async (c) => {
 
   const token = c.req.query("token") ?? "";
   if (!token) {
-    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    return c.html(
+      <NotFoundPage
+        lang={lang}
+        path={c.req.path}
+        message={t(lang, "newsletter.not_found")}
+      />,
+      404
+    );
   }
 
   const subscriber = await getSubscriberByToken(DB, token);
   if (!subscriber) {
-    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    return c.html(
+      <NotFoundPage
+        lang={lang}
+        path={c.req.path}
+        message={t(lang, "newsletter.not_found")}
+      />,
+      404
+    );
   }
 
   return c.html(<UnsubscribePage lang={lang} path={c.req.path} token={token} />);
@@ -104,13 +138,27 @@ pages.post("/unsubscribe", async (c) => {
       const formData = await c.req.formData();
       body = { token: formData.get("token")?.toString() ?? "" };
     } catch {
-      return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+      return c.html(
+        <NotFoundPage
+          lang={lang}
+          path={c.req.path}
+          message={t(lang, "newsletter.not_found")}
+        />,
+        404
+      );
     }
   }
 
   const token = body.token ?? "";
   if (!token) {
-    return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+    return c.html(
+      <NotFoundPage
+        lang={lang}
+        path={c.req.path}
+        message={t(lang, "newsletter.not_found")}
+      />,
+      404
+    );
   }
 
   await unsubscribeByToken(DB, token);
@@ -124,27 +172,7 @@ pages.get("/manifest.json", (c) => {
 
 pages.get("/offline", (c) => {
   const lang = detectLang(c.req.raw);
-  return c.html(
-    <html lang={lang}>
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Offline — Trend Catcher</title>
-        <style>{`
-          body { font-family: sans-serif; background: #fff; color: #111; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .box { text-align: center; }
-          .box h1 { font-size: 24px; color: #f78166; }
-          .box p { color: #666; margin-top: 8px; }
-        `}</style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>📡 Offline</h1>
-          <p>{lang === "zh" ? "您当前处于离线状态，请检查网络连接。" : "You are currently offline. Please check your connection."}</p>
-        </div>
-      </body>
-    </html>
-  );
+  return c.html(<OfflinePage lang={lang} path={c.req.path} />);
 });
 
 export default pages;

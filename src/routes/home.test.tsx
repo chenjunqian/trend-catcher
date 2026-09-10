@@ -112,25 +112,42 @@ describe("Home — paginated timeline", () => {
     expect(html).toContain('id="items-container"');
   });
 
-  it("renders newspaper masthead", () => {
+  it("renders kami site header with serif wordmark", () => {
     const html = render();
-    expect(html).toContain('class="masthead"');
-    expect(html).toContain('class="masthead-title"');
+    expect(html).toContain('class="site-header"');
+    expect(html).toContain('class="brand-title"');
+    expect(html).not.toContain('class="masthead"');
   });
 
-  it("renders section title with flanking rules", () => {
+  it("renders page head with eyebrow and title", () => {
     const html = render();
-    expect(html).toContain('class="section-title"');
+    expect(html).toContain('class="page-head"');
+    expect(html).toContain('class="page-title"');
+    expect(html).toContain('class="eyebrow"');
   });
 
-  it("structures cards as editorial strips", () => {
+  it("structures entries as hairline editorial rows", () => {
     const html = render();
-    expect(html).toContain('class="card-top"');
-    expect(html).toContain('class="card-date"');
+    expect(html).toContain('class="entry"');
+    expect(html).toContain('class="entry-top"');
+    expect(html).toContain('class="entry-date"');
+    expect(html).toContain('class="entry-preview"');
   });
 
-  it("marks weekly items with the weekly badge modifier", () => {
+  it("marks weekly items with the weekly tag modifier", () => {
     const html = render();
-    expect(html).toContain('class="badge badge-weekly"');
+    expect(html).toContain('class="tag tag--weekly"');
+  });
+
+  it("renders load more as a ghost pill button", () => {
+    const html = render({ nextCursor: "500" });
+    expect(html).toContain('class="btn-ghost"');
+  });
+
+  it("serves raw css without html-escaped quotes", () => {
+    const html = render();
+    const style = html.slice(html.indexOf("<style>") + 7, html.indexOf("</style>"));
+    expect(style).toContain('--serif: Charter, Georgia, Palatino, "Times New Roman", serif');
+    expect(style).not.toContain("&quot;");
   });
 });

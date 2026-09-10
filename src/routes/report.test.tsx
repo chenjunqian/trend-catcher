@@ -40,16 +40,18 @@ describe("Report — daily", () => {
     expect(html).toContain("2026-06-06");
   });
 
-  it("renders story headline block", () => {
+  it("renders report head block", () => {
     const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
-    expect(html).toContain('class="story-head"');
-    expect(html).toContain('class="story-title"');
+    expect(html).toContain('class="report-head"');
+    expect(html).toContain('class="report-date"');
+    expect(html).not.toContain('class="story-head"');
   });
 
-  it("renders site summaries in newspaper columns", () => {
+  it("renders site summaries in a kami card grid", () => {
     const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
-    expect(html).toContain('class="columns"');
-    expect(html).toContain('class="column"');
+    expect(html).toContain('class="site-grid"');
+    expect(html).toContain('class="site-card"');
+    expect(html).not.toContain('class="columns"');
   });
 
   it("shows site summaries section", () => {
@@ -135,7 +137,6 @@ describe("Report — malformed site_summaries", () => {
       site_summaries: "not-valid-json",
     };
     const html = render({ summary: badSummary, lang: "en", path: "/reports/2026-06-06" });
-    // Should not crash, just render without site summaries
     expect(html).toBeTruthy();
   });
 

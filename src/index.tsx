@@ -10,6 +10,8 @@ import type {
 import { Container } from "@cloudflare/containers";
 import pages from "./routes/pages";
 import api from "./routes/api";
+import { NotFoundPage } from "./routes/newsletter";
+import { detectLang } from "./i18n";
 import { generateAndEnqueueTasks, enqueueWeeklyTask } from "./tasks/generator";
 import { queueConsumer } from "./tasks/consumer";
 import type { TaskMessage } from "./tasks/generator";
@@ -32,6 +34,11 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.route("/", pages);
 app.route("/", api);
+
+app.notFound((c) => {
+  const lang = detectLang(c.req.raw);
+  return c.html(<NotFoundPage lang={lang} path={c.req.path} />, 404);
+});
 
 export default {
   fetch: app.fetch,

@@ -8,7 +8,7 @@ const swCode = readFileSync(resolve(__dirname, "../../public/sw.js"), "utf-8");
 
 describe("service worker", () => {
   it("contains a valid cache name", () => {
-    expect(swCode).toContain('const CACHE = "trend-catcher-v2"');
+    expect(swCode).toContain('const CACHE = "trend-catcher-v3"');
   });
 
   it("listens for install event", () => {

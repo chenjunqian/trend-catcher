@@ -1,24 +1,62 @@
-export function markdownToHtml(md: string): string {
-  return md
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #111;">$1</a>')
-    .replace(/\n- /g, "\n<li>")
-    .replace(/(<li>.*)/g, "<ul>$1</ul>")
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/^(.+)$/gm, (line) => {
-      if (line.startsWith("<")) return line;
-      return `<p>${line}</p>`;
-    })
-    .replace(/<\/ul><p><\/p><ul>/g, "</ul><ul>");
+const SERIF_STACK =
+  "Charter, Georgia, 'TsangerJinKai02', 'Source Han Serif SC', 'Songti SC', Georgia, serif";
+const UI_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+function inline(text: string): string {
+  return text
+    .replace(
+      /\*\*(.+?)\*\*/g,
+      '<strong style="font-weight:500;color:#141413;">$1</strong>'
+    )
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" style="color:#1B365D;text-decoration:underline;">$1</a>'
+    );
 }
 
-export function buildEmailHtml(enReport: string, zhReport: string, title: string, unsubscribeUrl?: string): string {
+export function markdownToHtml(md: string): string {
+  const blocks = md.trim().split(/\n{2,}/);
+  return blocks
+    .map((block) => {
+      const lines = block.split("\n").filter((line) => line.trim().length > 0);
+      if (lines.length === 0) return "";
+
+      if (lines.every((line) => /^[-*]\s+/.test(line.trim()))) {
+        const items = lines
+          .map(
+            (line) =>
+              `<li style="margin:0 0 4px;text-wrap:pretty;">${inline(line.trim().replace(/^[-*]\s+/, ""))}</li>`
+          )
+          .join("");
+        return `<ul style="margin:0 0 12px;padding-left:20px;">${items}</ul>`;
+      }
+
+      const heading = lines[0].match(/^(#{1,3})\s+(.*)$/);
+      if (heading) {
+        const level = heading[1].length;
+        const size = level === 1 ? "19px" : level === 2 ? "17px" : "15px";
+        const headingHtml = `<h${level} style="font-family:${SERIF_STACK};font-size:${size};font-weight:500;line-height:1.3;color:#141413;margin:22px 0 8px;">${inline(heading[2])}</h${level}>`;
+        const rest = lines.slice(1).join(" ");
+        return rest
+          ? headingHtml +
+              `<p style="font-family:${SERIF_STACK};font-size:15px;line-height:1.55;color:#3d3d3a;margin:0 0 12px;text-wrap:pretty;">${inline(rest)}</p>`
+          : headingHtml;
+      }
+
+      return `<p style="font-family:${SERIF_STACK};font-size:15px;line-height:1.55;color:#3d3d3a;margin:0 0 12px;text-wrap:pretty;">${inline(lines.join(" "))}</p>`;
+    })
+    .join("");
+}
+
+export function buildEmailHtml(
+  enReport: string,
+  zhReport: string,
+  title: string,
+  unsubscribeUrl?: string
+): string {
   const unsubscribeHtml = unsubscribeUrl
-    ? `<div style="text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-       <a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe / 取消订阅</a>
+    ? `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e3d8;text-align:center;font-family:${UI_STACK};font-size:12px;color:#6b6a64;">
+       <a href="${unsubscribeUrl}" style="color:#6b6a64;text-decoration:underline;">Unsubscribe / 取消订阅</a>
        </div>`
     : "";
 
@@ -31,50 +69,45 @@ export function buildEmailHtml(enReport: string, zhReport: string, title: string
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <style>
     @media (max-width: 600px) {
-      body {
+      .wrap {
         padding: 12px !important;
       }
       .header {
-        padding: 12px 16px !important;
-        margin: -12px -12px 16px !important;
+        padding: 0 0 16px !important;
       }
       .header h1 {
-        font-size: 16px !important;
+        font-size: 18px !important;
       }
       .section {
-        padding: 14px !important;
-      }
-      .section h2 {
-        font-size: 15px !important;
-      }
-      .footer {
-        padding: 12px 16px !important;
-        margin: 0 -12px -12px !important;
+        padding: 16px !important;
       }
     }
   </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #111; line-height: 1.6; padding: 20px; -webkit-text-size-adjust: 100%;">
-  <header class="header" style="border-bottom: 1px solid #e5e5e5; padding: 16px 24px; background: #fafafa; margin: -20px -20px 24px;">
-    <h1 style="font-size: 20px; font-weight: 400; letter-spacing: -0.5px; margin: 0; color: #111;">${title}</h1>
-  </header>
+<body style="margin: 0; padding: 0; background: #f5f4ed;">
+  <div class="wrap" style="max-width: 720px; margin: 0 auto; padding: 24px;">
+    <header class="header" style="padding: 0 0 20px;">
+      <h1 style="font-family: ${SERIF_STACK}; font-size: 20px; font-weight: 500; line-height: 1.3; color: #141413; margin: 0;">${title}</h1>
+    </header>
 
-  <main style="max-width: 840px; margin: 0 auto;">
-    <div class="section" style="background: #fafafa; border: 1px solid #e5e5e5; border-radius: 4px; padding: 20px; margin-bottom: 16px;">
-      <h2 style="font-size: 18px; font-weight: 400; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e5e5; color: #111;">English Report</h2>
-      ${markdownToHtml(enReport)}
-    </div>
+    <main>
+      <div class="section" style="background: #faf9f5; border-radius: 8px; padding: 22px 24px; margin-bottom: 16px;">
+        <h2 style="font-family: ${SERIF_STACK}; font-size: 17px; font-weight: 500; line-height: 1.3; color: #141413; margin: 0 0 12px;">English Report</h2>
+        ${markdownToHtml(enReport)}
+      </div>
 
-    <div class="section" style="background: #fafafa; border: 1px solid #e5e5e5; border-radius: 4px; padding: 20px; margin-bottom: 16px;">
-      <h2 style="font-size: 18px; font-weight: 400; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e5e5; color: #111;">中文报告</h2>
-      ${markdownToHtml(zhReport)}
-    </div>
-    ${unsubscribeHtml}
-  </main>
+      <div class="section" style="background: #faf9f5; border-radius: 8px; padding: 22px 24px; margin-bottom: 16px;">
+        <h2 style="font-family: ${SERIF_STACK}; font-size: 17px; font-weight: 500; line-height: 1.3; color: #141413; margin: 0 0 12px;">中文报告</h2>
+        ${markdownToHtml(zhReport)}
+      </div>
 
-  <footer class="footer" style="border-top: 1px solid #e5e5e5; padding: 16px 24px; text-align: center; color: #999; font-size: 12px; margin: 0 -20px -20px;">
-    &copy; ${new Date().getFullYear()} Trend Catcher — Powered by Cloudflare Workers &amp; AI
-  </footer>
+      ${unsubscribeHtml}
+    </main>
+
+    <footer style="border-top: 1px solid #e5e3d8; padding: 16px 0 0; text-align: center; font-family: ${UI_STACK}; font-size: 12px; color: #6b6a64;">
+      &copy; ${new Date().getFullYear()} Trend Catcher — Powered by Cloudflare Workers &amp; AI
+    </footer>
+  </div>
 </body>
 </html>`;
 }

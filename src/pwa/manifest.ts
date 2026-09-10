@@ -5,8 +5,8 @@ export const manifest = {
     "AI-powered daily trend aggregator for indie developers. Scrapes Product Hunt, Hacker News, and GitHub Trending, then generates bilingual summaries.",
   start_url: "/",
   display: "standalone",
-  background_color: "#ffffff",
-  theme_color: "#ffffff",
+  background_color: "#f5f4ed",
+  theme_color: "#f5f4ed",
   orientation: "portrait-primary",
   icons: [
     {

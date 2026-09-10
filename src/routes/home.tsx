@@ -19,14 +19,13 @@ interface HomeProps {
 const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
   return (
     <Layout title={t(lang, "site.subtitle")} lang={lang} path={path}>
-      <h2 class="section-title">
-        {t(lang, "home.heading")}
-      </h2>
+      <div class="page-head">
+        <p class="eyebrow">{t(lang, "home.eyebrow")}</p>
+        <h2 class="page-title">{t(lang, "home.heading")}</h2>
+      </div>
 
       {items.length === 0 ? (
-        <div class="empty">
-          <p style={{ fontSize: "16px" }}>{t(lang, "home.empty")}</p>
-        </div>
+        <div class="empty">{t(lang, "home.empty")}</div>
       ) : (
         <>
           <div id="items-container">
@@ -49,22 +48,20 @@ const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
               const report = lang === "zh" ? item.full_report_zh : item.full_report_en;
 
               return (
-                <a href={href} class="card-link">
-                  <div class="card">
-                    <div class="card-top">
-                      <span class="card-date">{label}</span>
-                      <span
-                        class={`badge${item.type === "weekly" ? " badge-weekly" : ""}`}
-                      >
-                        {badgeText}
-                      </span>
-                    </div>
-                    <p class="card-preview">
-                      {report
-                        ? <ContentHtml html={stripMarkdownPreview(report)} />
-                        : "..."}
-                    </p>
+                <a href={href} class="entry">
+                  <div class="entry-top">
+                    <span class="entry-date">{label}</span>
+                    <span
+                      class={`tag${item.type === "weekly" ? " tag--weekly" : ""}`}
+                    >
+                      {badgeText}
+                    </span>
                   </div>
+                  <p class="entry-preview">
+                    {report
+                      ? <ContentHtml html={stripMarkdownPreview(report)} />
+                      : "..."}
+                  </p>
                 </a>
               );
             })}
@@ -74,16 +71,13 @@ const Home: FC<HomeProps> = ({ items, nextCursor, lang, path }) => {
             <div class="load-more-wrap">
               <button
                 id="load-more"
-                class="btn-load-more"
+                class="btn-ghost"
                 data-cursor={nextCursor}
                 data-lang={lang}
               >
                 {lang === "zh" ? "加载更多" : "Load more"}
               </button>
-              <div
-                id="load-more-msg"
-                style="font-size:12px;color:#999;margin-top:8px;min-height:1.2em;"
-              />
+              <div id="load-more-msg" />
             </div>
           )}
         </>
