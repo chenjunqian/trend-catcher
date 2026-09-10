@@ -1,18 +1,26 @@
-export const KAMI_TOKENS = `
-@font-face {
+import { FONT_CHUNKS } from "./font-chunks";
+
+const FONT_FACES = FONT_CHUNKS.map(
+  (chunk) => `@font-face {
   font-family: "TsangerJinKai02";
-  src: url("/fonts/TsangerJinKai02-W04.woff2") format("woff2");
+  src: url("${chunk.w04}") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
+  unicode-range: ${chunk.unicodeRange};
 }
 @font-face {
   font-family: "TsangerJinKai02";
-  src: url("/fonts/TsangerJinKai02-W05.woff2") format("woff2");
+  src: url("${chunk.w05}") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
-}
+  unicode-range: ${chunk.unicodeRange};
+}`,
+).join("\n");
+
+export const KAMI_TOKENS = `
+${FONT_FACES}
 :root {
   --parchment: #f5f4ed;
   --ivory: #faf9f5;

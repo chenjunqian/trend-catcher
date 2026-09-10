@@ -97,7 +97,7 @@ Routes are split into two Hono sub-apps mounted in `src/index.tsx`:
 - **Email sender abstraction**: `email.ts` defines an `EmailSender` interface. The Worker provides a Cloudflare Email Send implementation; the interface could be swapped for other providers.
 - **Newsletter with double opt-in**: Subscribers table with `is_confirmed` flag. A confirmation email is sent on subscribe; users click a link to confirm. Unsubscribe uses a unique per-subscriber token.
 - **Cursor pagination**: Homepage timeline uses cursor-based pagination (`created_at` timestamp, 20 items per page) for efficient infinite scroll.
-- **Kami design system**: Screen pages follow the Kami editorial language — parchment `#f5f4ed` background, single ink-blue accent `#1B365D`, one serif per page (Charter/Georgia for EN, TsangerJinKai02 subset for ZH), warm-toned grays, no decorative rules or italics. Shared tokens and primitives live in `src/routes/styles.ts`; the ZH webfont is a self-hosted woff2 subset built by `scripts/subset-fonts.py`. `theme-color` is `#f5f4ed`.
+- **Kami design system**: Screen pages follow the Kami editorial language — parchment `#f5f4ed` background, single ink-blue accent `#1B365D`, one serif per page (Charter/Georgia for EN, TsangerJinKai02 subset for ZH), warm-toned grays, no decorative rules or italics. Shared tokens and primitives live in `src/routes/styles.ts`; the ZH webfont is frequency-sliced into `unicode-range` woff2 chunks by `scripts/subset-fonts.py`, so browsers fetch only the chunks covering the glyphs on the page. Chunk order comes from `scripts/data/cjk-frequency.txt`, the manifest is generated into `src/routes/font-chunks.ts`. `theme-color` is `#f5f4ed`.
 
 ---
 
@@ -114,7 +114,7 @@ trend-catcher/
 ├── .env.example               # Env var template (DEEPSEEK_API_KEY + INTERNAL_SECRET)
 ├── AGENTS.md                  # This file
 ├── public/                    # Static assets (icons, manifest, SW, JS)
-│   ├── fonts/                 # Self-hosted TsangerJinKai02 woff2 subsets (W04/W05)
+│   ├── fonts/                 # Frequency-sliced TsangerJinKai02 woff2 chunks (W04/W05)
 │   ├── _headers               # Immutable cache for /fonts/*
 │   ├── favicon.ico
 │   ├── favicon-16x16.png
@@ -129,7 +129,9 @@ trend-catcher/
 ├── scripts/
 │   ├── test-scrapers.ts       # Manual scraper test runner
 │   ├── it-test.ts             # Full integration test (Phase 0→1→2→3→5→4)
-│   ├── subset-fonts.py        # Build TsangerJinKai02 woff2 subsets into public/fonts
+│   ├── subset-fonts.py        # Build frequency-sliced woff2 chunks + src/routes/font-chunks.ts
+│   ├── data/
+│   │   └── cjk-frequency.txt  # Frequency-ordered ZH charset driving the font slicing
 │   └── proxy.ts               # Auto-detect https_proxy for local dev
 └── src/
     ├── index.tsx              # Hono app entry (routes mount, queue handler, cron handler, AggregatorContainer DO)
@@ -160,6 +162,7 @@ trend-catcher/
     │   ├── pages.tsx          # Page routes: /, /reports/:date, /reports/weekly/:date, /confirm, /unsubscribe, /manifest.json, /offline
     │   ├── api.ts             # API routes: /api/subscribe, /internal/*, /internal/send-email
     │   ├── styles.ts          # Kami design tokens + layout/standalone CSS layers
+    │   ├── font-chunks.ts     # Generated unicode-range chunk manifest (do not edit by hand)
     │   ├── layout.tsx         # Layout component (Kami header/footer, newsletter form, pull-to-refresh, lang switch)
     │   ├── home.tsx           # GET / — report list with cursor pagination (20 per page, load more)
     │   ├── report.tsx         # GET /reports/:date + /reports/weekly/:date — bilingual report detail
@@ -242,7 +245,7 @@ npx vitest run                # Single run
 npx vitest run --coverage     # With coverage
 ```
 
-### Test Files (21 total)
+### Test Files (22 total)
 
 ```
 src/
@@ -266,7 +269,8 @@ src/
 │   ├── report.test.tsx
 │   ├── newsletter.test.tsx
 │   ├── markdown.test.ts
-│   └── styles.test.ts
+│   ├── styles.test.ts
+│   └── font-chunks.test.ts
 ├── pwa/
 │   ├── manifest.test.ts
 │   └── sw.test.ts
@@ -297,6 +301,7 @@ src/
 | `routes/newsletter.tsx` | Unit | Standalone pages, verify Kami tokens + actions |
 | `routes/markdown.ts` | Unit | Verify markdown → HTML block rendering |
 | `routes/styles.ts` | Unit | Verify tokens, font faces, retired palette absence |
+| `routes/font-chunks.ts` | Unit | Verify generated chunks match public/fonts on disk |
 | `notifier/template.ts` | Unit | Verify email HTML tokens and markdown rendering |
 | `i18n/index.ts` | Unit | Pure functions, no mocking needed |
 | `pwa/manifest.ts` | Unit | Verify manifest shape |
