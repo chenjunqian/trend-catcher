@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { KAMI_TOKENS, LAYOUT_STYLES, STANDALONE_STYLES } from "./styles";
+import { FONT_CHUNKS } from "./font-chunks";
 
 describe("kami style tokens", () => {
   it("defines parchment, ivory and ink-blue brand tokens", () => {
@@ -15,10 +16,18 @@ describe("kami style tokens", () => {
     expect(KAMI_TOKENS).not.toContain("#1a1a1a");
   });
 
-  it("declares both TsangerJinKai02 weights as woff2", () => {
-    expect(KAMI_TOKENS).toContain("TsangerJinKai02-W04.woff2");
-    expect(KAMI_TOKENS).toContain("TsangerJinKai02-W05.woff2");
+  it("slices both TsangerJinKai02 weights into unicode-range chunks", () => {
+    expect(KAMI_TOKENS).toContain("TsangerJinKai02-W04-000.woff2");
+    expect(KAMI_TOKENS).toContain("TsangerJinKai02-W05-000.woff2");
     expect(KAMI_TOKENS).toContain('format("woff2")');
+    expect(KAMI_TOKENS).toContain("unicode-range:");
+    const faces = KAMI_TOKENS.match(/@font-face/g) ?? [];
+    expect(faces.length).toBe(FONT_CHUNKS.length * 2);
+  });
+
+  it("no longer ships monolithic font files", () => {
+    expect(KAMI_TOKENS).not.toContain("TsangerJinKai02-W04.woff2");
+    expect(KAMI_TOKENS).not.toContain("TsangerJinKai02-W05.woff2");
   });
 
   it("keeps a CJK serif fallback chain", () => {

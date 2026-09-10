@@ -2,6 +2,7 @@ import type { FC } from "hono/jsx";
 import type { Lang } from "../i18n";
 import { t, switchLang } from "../i18n";
 import { KAMI_TOKENS, LAYOUT_STYLES } from "./styles";
+import { FONT_CHUNKS } from "./font-chunks";
 
 const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = ({
   title,
@@ -25,23 +26,14 @@ const Layout: FC<{ title: string; lang: Lang; path: string; children?: any }> = 
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        {lang === "zh" && (
-          <>
-            <link
-              rel="preload"
-              as="font"
-              type="font/woff2"
-              href="/fonts/TsangerJinKai02-W04.woff2"
-              crossorigin="anonymous"
-            />
-            <link
-              rel="preload"
-              as="font"
-              type="font/woff2"
-              href="/fonts/TsangerJinKai02-W05.woff2"
-              crossorigin="anonymous"
-            />
-          </>
+        {lang === "zh" && FONT_CHUNKS[0] && (
+          <link
+            rel="preload"
+            as="font"
+            type="font/woff2"
+            href={FONT_CHUNKS[0].w04}
+            crossorigin="anonymous"
+          />
         )}
         <title>
           {title} — {t(lang, "site.title")}
