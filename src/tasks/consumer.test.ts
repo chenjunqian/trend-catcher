@@ -22,10 +22,15 @@ vi.mock("../notifier/email", () => ({
   sendWeeklyEmail: vi.fn(),
 }));
 
+vi.mock("./processors/googletrends", () => ({
+  fetchGoogleTrends: vi.fn().mockResolvedValue([{ title: "test query", approxTraffic: "10K+", link: "https://trends.google.com", pubDate: "2026-06-01", newsItems: [] }]),
+}));
+
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { runAggregation } from "../aggregator/aggregate";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
+import { fetchGoogleTrends } from "./processors/googletrends";
 
 function makeMsg(body: TaskMessage) {
   return {
@@ -343,5 +348,30 @@ describe("queueConsumer — daily messages", () => {
 
     // Daily messages don't route to weekly
     expect(triggerWeeklyContainerAggregation).not.toHaveBeenCalled();
+  });
+
+  it("processes googletrends scrape task and updates status", async () => {
+    const s = newStmt();
+    s.first.mockResolvedValueOnce({ id: "2026-06-01_googletrends_daily", status: "pending" });
+    const m = mockD1(s);
+
+    const gtMsg: TaskMessage = {
+      id: "2026-06-01_googletrends_daily",
+      scheduled_date: "2026-06-01",
+      website: "googletrends",
+      item: "daily",
+    };
+
+    const env: Env = {
+      DB: m as unknown as D1Database,
+      DEEPSEEK_API_KEY: "sk-test",
+      EMAIL: mockEmail(),
+    };
+
+    const msg = makeMsg(gtMsg);
+    const batch = makeBatch([msg]);
+    await queueConsumer(batch, env, mockCtx());
+
+    expect(msg.ack).toHaveBeenCalled();
   });
 });

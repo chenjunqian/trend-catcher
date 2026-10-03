@@ -12,11 +12,37 @@ import {
 import { getDateRangeForWeek } from "../utils/date";
 import { searchWeb } from "./search";
 import { fetchHtml } from "../utils/fetcher";
+import { fetchGoogleAutocomplete } from "../tasks/processors/googletrends";
 import * as cheerio from "cheerio";
 
 export interface SiteSummaryEntry {
   en: string;
   zh: string;
+}
+
+function createGoogleSuggestTool(logPrefix: string) {
+  return tool({
+    description:
+      "Get real-time Google search autocomplete suggestions for a given keyword, product name, or topic. Use this to discover search intent, user questions, rising long-tail keywords, and market demand.",
+    parameters: z.object({
+      query: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe("The keyword or phrase to get Google search suggestions for."),
+      lang: z.string().optional().describe("Language code, e.g. 'en' or 'zh'. Defaults to 'en'."),
+      geo: z.string().optional().describe("Country code, e.g. 'us'. Defaults to 'us'."),
+    }),
+    execute: async ({ query, lang = "en", geo = "us" }) => {
+      console.log(`${logPrefix} googleSuggest: "${query}" (${lang}/${geo})`);
+      const suggestions = await fetchGoogleAutocomplete(query, lang, geo);
+      return {
+        query,
+        suggestions,
+        totalSuggestions: suggestions.length,
+      };
+    },
+  });
 }
 
 function createWebSearchTool(logPrefix: string) {
@@ -96,13 +122,14 @@ function createWebfetchTool(logPrefix: string) {
 export function createAgentTools(db: D1Database, date: string) {
   const webSearch = createWebSearchTool("[tool]");
   const webfetch = createWebfetchTool("[tool]");
+  const googleSuggest = createGoogleSuggestTool("[tool]");
 
   const getRawDataByWebsite = tool({
     description:
       "Retrieve all raw scraped data for a given website on today's date. Returns JSON formatted raw content.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
     }),
     execute: async ({ website }) => {
@@ -143,7 +170,7 @@ export function createAgentTools(db: D1Database, date: string) {
       "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
@@ -226,6 +253,7 @@ export function createAgentTools(db: D1Database, date: string) {
 
   return {
     getRawDataByWebsite,
+    googleSuggest,
     webSearch,
     webfetch,
     saveSiteSummary,
@@ -244,13 +272,14 @@ export function createInMemoryAgentTools(
   let reportZh = "";
   const webSearch = createWebSearchTool("[tool:mem]");
   const webfetch = createWebfetchTool("[tool:mem]");
+  const googleSuggest = createGoogleSuggestTool("[tool:mem]");
 
   const getRawDataByWebsite = tool({
     description:
       "Retrieve all raw scraped data for a given website on today's date. Returns JSON formatted raw content.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
     }),
     execute: async ({ website }) => {
@@ -280,7 +309,7 @@ export function createInMemoryAgentTools(
       "Save the daily trend summary for a specific website. You MUST provide summaries in BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items. Category tags: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], etc. Use Markdown links [Name](URL) for every product. Do NOT write prose paragraphs.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
@@ -322,6 +351,7 @@ export function createInMemoryAgentTools(
   return {
     tools: {
       getRawDataByWebsite,
+      googleSuggest,
       webSearch,
       webfetch,
       saveSiteSummary,
@@ -342,6 +372,7 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
   const weekEndDate = weekDates[6];
   const webSearch = createWebSearchTool("[tool:weekly]");
   const webfetch = createWebfetchTool("[tool:weekly]");
+  const googleSuggest = createGoogleSuggestTool("[tool:weekly]");
 
   const getDailySummaries = tool({
     description:
@@ -373,7 +404,7 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
       "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. Format each item on its own Markdown bullet line: \"- [Category] [Name](URL) — description\". Max 10 items.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
@@ -445,6 +476,7 @@ export function createWeeklyAgentTools(db: D1Database, weekStartDate: string) {
 
   return {
     getDailySummaries,
+    googleSuggest,
     webSearch,
     webfetch,
     saveSiteSummary,
@@ -468,6 +500,7 @@ export function createInMemoryWeeklyAgentTools(
   let reportZh = "";
   const webSearch = createWebSearchTool("[tool:mem:weekly]");
   const webfetch = createWebfetchTool("[tool:mem:weekly]");
+  const googleSuggest = createGoogleSuggestTool("[tool:mem:weekly]");
 
   const getDailySummaries = tool({
     description:
@@ -489,7 +522,7 @@ export function createInMemoryWeeklyAgentTools(
       "Save the weekly trend summary for a specific website. Synthesize the week's daily summaries into a concise weekly overview. Provide BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters.",
     parameters: z.object({
       website: z
-        .enum(["producthunt", "hackernews", "github"])
+        .enum(["producthunt", "hackernews", "github", "googletrends"])
         .describe("Website identifier"),
       summaryEn: z
         .string()
@@ -527,6 +560,7 @@ export function createInMemoryWeeklyAgentTools(
   return {
     tools: {
       getDailySummaries,
+      googleSuggest,
       webSearch,
       webfetch,
       saveSiteSummary,

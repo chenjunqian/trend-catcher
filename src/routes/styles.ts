@@ -261,6 +261,13 @@ main { max-width: 1120px; margin: 0 auto; padding: 48px 32px 72px; }
 .site-body ul, .site-body ol { margin: 0 0 10px; padding-left: 18px; }
 .site-body li { margin-bottom: 4px; text-wrap: balance; }
 .site-body a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.summary-zone { margin-bottom: 32px; }
+.zone-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.zone-title { font-family: var(--latin-ui); font-size: 12px; font-weight: 500; letter-spacing: 0.4px; text-transform: uppercase; color: var(--stone); display: flex; align-items: center; gap: 10px; flex: 1; }
+.zone-title::after { content: ""; flex: 1; height: 1px; background: var(--border-soft); }
+.tag--demand { background: var(--tag-bg); color: var(--brand); }
+.demand-card { background: var(--ivory); border-radius: 8px; padding: 22px 26px; }
+.demand-body { columns: 2; column-gap: 32px; column-rule: 1px solid var(--border-soft); }
 
 .report-section { margin-top: 48px; }
 .report-body {
@@ -349,6 +356,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 48px 32px 72px; }
   .page-title { font-size: 28px; }
   .report-date { font-size: 30px; }
   .site-grid { grid-template-columns: 1fr; }
+  .demand-body { columns: 1; }
   .site-footer-inner { flex-direction: column; align-items: flex-start; gap: 18px; padding: 28px 20px; }
   .footer-colophon { text-align: left; }
 }

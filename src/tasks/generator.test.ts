@@ -11,21 +11,23 @@ function mockQueue() {
 }
 
 describe("generateAndEnqueueTasks", () => {
-  it("creates and enqueues tasks for all 3 websites", async () => {
+  it("creates and enqueues tasks for all 4 websites", async () => {
     const m = mockD1();
     const db = m as unknown as D1Database;
     const queue = mockQueue();
 
     const count = await generateAndEnqueueTasks(db, queue as unknown as Queue<TaskMessage>);
 
-    expect(count).toBe(3);
+    expect(count).toBe(4);
     expect(queue.sendBatch).toHaveBeenCalledTimes(1);
 
     const calls = (queue.sendBatch as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     expect(calls[0].body.website).toBe("producthunt");
     expect(calls[1].body.website).toBe("hackernews");
     expect(calls[2].body.website).toBe("github");
+    expect(calls[3].body.website).toBe("googletrends");
+    expect(calls[3].body.item).toBe("daily");
   });
 
   it("uses today's date for task generation", async () => {

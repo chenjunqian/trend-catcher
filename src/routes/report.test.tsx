@@ -10,6 +10,7 @@ const dailySummary = {
   site_summaries: JSON.stringify({
     producthunt: { en: "PH summary EN", zh: "PH summary ZH" },
     github: { en: "GH summary EN", zh: "GH summary ZH" },
+    googletrends: { en: "GT summary EN", zh: "GT summary ZH" },
   }),
   is_notified: 0,
   created_at: 1000,
@@ -54,11 +55,48 @@ describe("Report — daily", () => {
     expect(html).not.toContain('class="columns"');
   });
 
-  it("shows site summaries section", () => {
+  it("shows site summaries section with supply and demand dual zones", () => {
     const html = render({ summary: dailySummary, lang: "en", path: "/reports/2026-06-06" });
     expect(html).toContain("Site Summaries");
+    expect(html).toContain("Launch &amp; Tech Ecosystem");
+    expect(html).toContain("Search Demand &amp; Niche Radar");
+    expect(html).toContain('class="site-card demand-card"');
     expect(html).toContain("Product Hunt");
     expect(html).toContain("GitHub Trending");
+    expect(html).toContain("Google Trends");
+  });
+
+  it("renders dual-zone section titles in Chinese", () => {
+    const html = render({ summary: dailySummary, lang: "zh", path: "/reports/2026-06-06" });
+    expect(html).toContain("各站摘要");
+    expect(html).toContain("行业动态与产品供给");
+    expect(html).toContain("全网搜索需求与利基雷达");
+  });
+
+  it("renders only supply section when googletrends is absent", () => {
+    const withoutGTSummary = {
+      ...dailySummary,
+      site_summaries: JSON.stringify({
+        producthunt: { en: "PH", zh: "PH" },
+        github: { en: "GH", zh: "GH" },
+      }),
+    };
+    const html = render({ summary: withoutGTSummary, lang: "en", path: "/reports/2026-06-06" });
+    expect(html).toContain("Launch &amp; Tech Ecosystem");
+    expect(html).not.toContain("demand-zone");
+  });
+
+  it("renders only demand section when only googletrends is present", () => {
+    const onlyGTSummary = {
+      ...dailySummary,
+      site_summaries: JSON.stringify({
+        googletrends: { en: "GT", zh: "GT" },
+      }),
+    };
+    const html = render({ summary: onlyGTSummary, lang: "en", path: "/reports/2026-06-06" });
+    expect(html).toContain("Search Demand &amp; Niche Radar");
+    expect(html).toContain('class="site-card demand-card"');
+    expect(html).not.toContain("Launch &amp; Tech Ecosystem");
   });
 
   it("renders full report depending on lang", () => {

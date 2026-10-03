@@ -75,6 +75,20 @@ describe("weekly i18n keys", () => {
     expect(t("en", "report.week_label")).toContain("{date}");
     expect(t("zh", "report.week_label")).toContain("{date}");
   });
+
+  it("site.googletrends exists in both languages", () => {
+    expect(t("en", "site.googletrends")).toBe("Google Trends");
+    expect(t("zh", "site.googletrends")).toBe("谷歌趋势");
+  });
+
+  it("supply and demand section keys exist in both languages", () => {
+    expect(t("en", "report.supply_section")).toBe("Launch & Tech Ecosystem");
+    expect(t("zh", "report.supply_section")).toBe("行业动态与产品供给");
+    expect(t("en", "report.demand_section")).toBe("Search Demand & Niche Radar");
+    expect(t("zh", "report.demand_section")).toBe("全网搜索需求与利基雷达");
+    expect(t("en", "report.demand_badge")).toBe("Market Demand");
+    expect(t("zh", "report.demand_badge")).toBe("真实需求");
+  });
 });
 
 describe("kami screen keys", () => {

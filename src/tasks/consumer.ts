@@ -10,6 +10,7 @@ import {
 import { fetchProductHuntTop20 } from "./processors/producthunt";
 import { fetchHackerNewsTop30 } from "./processors/hackernews";
 import { fetchGitHubTrending } from "./processors/github";
+import { fetchGoogleTrends } from "./processors/googletrends";
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { runAggregation } from "../aggregator/aggregate";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
@@ -49,6 +50,9 @@ async function processTask(
         break;
       case "github":
         rawData = await fetchGitHubTrending();
+        break;
+      case "googletrends":
+        rawData = await fetchGoogleTrends();
         break;
       case "weekly":
         await updateTaskStatus(db, message.id, "completed");

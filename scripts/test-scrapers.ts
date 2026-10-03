@@ -2,6 +2,7 @@ import "./proxy";
 import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
+import { fetchGoogleTrends, fetchGoogleAutocomplete } from "../src/tasks/processors/googletrends";
 
 function summary(data: unknown): string {
   if (Array.isArray(data)) {
@@ -36,6 +37,8 @@ async function test(name: string, fn: () => Promise<unknown>) {
   await test("Product Hunt Top 20", fetchProductHuntTop20);
   await test("Hacker News Top 30", fetchHackerNewsTop30);
   await test("GitHub Trending", fetchGitHubTrending);
+  await test("Google Trends Daily US", () => fetchGoogleTrends("US"));
+  await test("Google Autocomplete (ai tools)", () => fetchGoogleAutocomplete("ai tools"));
 
   console.log(`\n${"=".repeat(60)}`);
   console.log("  All tests complete.");

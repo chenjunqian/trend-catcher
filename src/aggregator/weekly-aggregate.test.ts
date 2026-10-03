@@ -23,6 +23,7 @@ vi.mock("../db/client", () => ({
       producthunt: { en: "PH", zh: "PH" },
       hackernews: { en: "HN", zh: "HN" },
       github: { en: "GH", zh: "GH" },
+      googletrends: { en: "GT", zh: "GT" },
     }),
     full_report_en: "report en",
     full_report_zh: "report zh",
@@ -48,10 +49,11 @@ describe("WEEKLY_SYSTEM_PROMPT", () => {
     expect(WEEKLY_SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
-  it("mentions all three websites", () => {
+  it("mentions all four websites", () => {
     expect(WEEKLY_SYSTEM_PROMPT).toContain("Product Hunt");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("Hacker News");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("GitHub Trending");
+    expect(WEEKLY_SYSTEM_PROMPT).toContain("Google Trends");
   });
 
   it("mentions weekly-specific content", () => {
