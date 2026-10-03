@@ -13,7 +13,7 @@ export interface TaskMessage {
   type?: "weekly" | "manual-daily" | "manual-weekly";
 }
 
-const WEBSITES = ["producthunt", "hackernews", "github"] as const;
+const WEBSITES = ["producthunt", "hackernews", "github", "googletrends"] as const;
 
 function generateTaskId(website: string, item: string, date: string): string {
   return `${date}_${website}_${item}`;
@@ -48,6 +48,15 @@ function generateTasks(date: string): TaskMessage[] {
           scheduled_date: date,
           website,
           item: "trending",
+        });
+        break;
+
+      case "googletrends":
+        tasks.push({
+          id: generateTaskId(website, "daily", date),
+          scheduled_date: date,
+          website,
+          item: "daily",
         });
         break;
     }

@@ -72,6 +72,7 @@ export async function triggerContainerAggregation(
     producthunt: [],
     hackernews: [],
     github: [],
+    googletrends: [],
   };
 
   for (const task of result.results ?? []) {
@@ -85,7 +86,7 @@ export async function triggerContainerAggregation(
   }
 
   const totalItems = Object.values(rawData).reduce((s, arr) => s + arr.length, 0);
-  console.log(`[container-orch] Sending ${totalItems} items to container (ph=${rawData.producthunt.length}, hn=${rawData.hackernews.length}, gh=${rawData.github.length})`);
+  console.log(`[container-orch] Sending ${totalItems} items to container (ph=${rawData.producthunt.length}, hn=${rawData.hackernews.length}, gh=${rawData.github.length}, gt=${rawData.googletrends.length})`);
 
   const container = getContainer(containerBinding as Parameters<typeof getContainer>[0], "trend-catcher");
 

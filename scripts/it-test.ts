@@ -6,11 +6,13 @@ import "./proxy";
 import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
+import { fetchGoogleTrends } from "../src/tasks/processors/googletrends";
 import { getTodayDateString, getLastWeekMonday, getDateRangeForWeek } from "../src/utils/date";
 
 const TASK_ID_PH = "producthunt_top10";
 const TASK_ID_HN = "hackernews_top30";
 const TASK_ID_GH = "github_trending";
+const TASK_ID_GT = "googletrends_daily";
 const D1_DB = "trend-catcher-db";
 const NOW = Math.floor(Date.now() / 1000);
 const DATE = getTodayDateString();
@@ -75,6 +77,7 @@ async function main() {
   let ph: unknown = [];
   let hn: unknown = [];
   let gh: unknown = [];
+  let gt: unknown = [];
 
   try {
     console.log("  [PH]  Product Hunt...");
@@ -100,6 +103,14 @@ async function main() {
     console.log(`  [GH]  ❌ ${(err as Error).message}`);
   }
 
+  try {
+    console.log("  [GT]  Google Trends...");
+    gt = await fetchGoogleTrends("US");
+    console.log(`  [GT]  ✅ ${(gt as unknown[]).length} items`);
+  } catch (err) {
+    console.log(`  [GT]  ❌ ${(err as Error).message}`);
+  }
+
   console.log("");
 
   // ── Phase 2: Reset + Insert into D1 ────────────
@@ -116,8 +127,11 @@ async function main() {
   if (Array.isArray(gh) && gh.length > 0) {
     insertTask(TASK_ID_GH, "github", "trending", JSON.stringify(gh));
   }
+  if (Array.isArray(gt) && gt.length > 0) {
+    insertTask(TASK_ID_GT, "googletrends", "daily", JSON.stringify(gt));
+  }
 
-  const taskCount = [ph, hn, gh].filter(
+  const taskCount = [ph, hn, gh, gt].filter(
     (a) => Array.isArray(a) && (a as unknown[]).length > 0
   ).length;
   console.log(`  ✅ ${taskCount} tasks written to D1\n`);
@@ -159,6 +173,7 @@ async function main() {
       producthunt: { en: `- [AI] Product ${d}](https://example.com) — A trending product on ${d}`, zh: `- [AI] 产品${d}](https://example.com) — ${d}热门产品` },
       hackernews: { en: `- [DevTools] HN Topic ${d}](https://example.com) — Discussion on ${d}`, zh: `- [DevTools] HN话题${d}](https://example.com) — ${d}讨论` },
       github: { en: `- [Open Source] Repo ${d}](https://example.com) — Trending on ${d}`, zh: `- [Open Source] 仓库${d}](https://example.com) — ${d}趋势` },
+      googletrends: { en: `- [Search Trends] Query ${d}](https://trends.google.com) — Trending search on ${d}`, zh: `- [Search Trends] 搜索词${d}](https://trends.google.com) — ${d}热门搜索` },
     });
     const escapedSummaries = siteSummaries.replace(/'/g, "''");
     const escapedEn = `## ${d} Report\\n\\nDaily trend report for ${d}.`.replace(/'/g, "''");

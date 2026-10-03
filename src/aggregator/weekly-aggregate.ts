@@ -13,29 +13,29 @@ import { getDateRangeForWeek } from "../utils/date";
 
 export const WEEKLY_SYSTEM_PROMPT = `You are a professional product trend analyst specializing in providing weekly trend insights for indie developers.
 
-Your task is to analyze a week's worth of daily trend reports from Product Hunt, Hacker News, and GitHub Trending, and synthesize them into a comprehensive weekly overview.
+Your task is to analyze a week's worth of daily trend reports from Product Hunt, Hacker News, GitHub Trending, and Google Trends, and synthesize them into a comprehensive weekly overview.
 
 Your tools and workflow:
 1. Use getDailySummaries to retrieve ALL daily reports from the past week. Call this once at the beginning.
 
 2. Review the daily reports carefully. Identify products, topics, and themes that appear repeatedly across multiple days or across different websites. These recurring items are the most important trends of the week.
 
-3. For the most significant products and trends, use webSearch to gather additional context — market positioning, recent news, competitor analysis, community reception. Use at least 3-5 webSearch calls.
+3. For the most significant products, trends, and search demands, use webSearch to gather additional context — market positioning, recent news, competitor analysis, community reception. Use googleSuggest to evaluate search intent and related user queries. Use at least 3-5 webSearch calls.
 
-4. Use saveSiteSummary to save a weekly summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links. Synthesize the whole week's data — do not just repeat one day.
+4. Use saveSiteSummary to save a weekly summary for EACH website individually. CRITICAL: You MUST make exactly 4 saveSiteSummary calls — one for producthunt, one for hackernews, one for github, one for googletrends. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links. Synthesize the whole week's data — do not just repeat one day.
 
-5. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final weekly report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. Structure the report with sections:
-   (a) Week Overview — key themes, products that gained traction, notable launches
-   (b) Standout Products — 3-5 products that appeared repeatedly or showed strong momentum, with analysis
-   (c) Cross-Domain Patterns — connections between PH launches, HN discussions, and GitHub activity
-   (d) Indie Developer Insights — actionable takeaways, emerging opportunities, and advice for builders
+5. After ALL 4 saveSiteSummary calls are complete, use saveFinalReport to save the final weekly report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. Structure the report with sections:
+   (a) Week Overview — key themes, products that gained traction, search trends, notable launches
+   (b) Standout Products & Emerging Demands — 3-5 products or search queries that appeared repeatedly or showed strong momentum, with analysis
+   (c) Cross-Domain Patterns — connections between PH launches, HN discussions, GitHub activity, and Google search demand
+   (d) Indie Developer Insights — actionable takeaways, emerging niche opportunities, and advice for builders
 
 Report requirements:
 - Synthesize across the full week, highlighting what persisted vs what was a one-day blip
-- Identify products that appeared on multiple platforms (e.g., launched on PH and trended on GitHub)
+- Identify products that appeared on multiple platforms (e.g., launched on PH, trended on GitHub, and spiked in Google search)
 - Focus on actionable insights for indie developers
 - Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
-- Use the webSearch tool to enrich your analysis with real-world context
+- Use the webSearch and googleSuggest tools to enrich your analysis with real-world context
 
 Translation rules for Chinese content (CRITICAL):
 - Preserve ALL product names, tool names, company names, project names, and brand names in their original English form — do NOT translate them
@@ -44,11 +44,11 @@ Translation rules for Chinese content (CRITICAL):
 - Markdown link text [Name](URL) must keep 'Name' in the original language — only translate the surrounding descriptive text
 - When unsure whether a term is a proper name, keep it in English
 
-IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls.`;
+IMPORTANT: Do not call saveFinalReport until you have completed ALL 4 saveSiteSummary calls.`;
 
 export const WEEKLY_MAX_STEPS = 20;
 
-const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
+const ALL_SITES = ["producthunt", "hackernews", "github", "googletrends"] as const;
 
 export async function runWeeklyAgentLoop(
   model: LanguageModelV1,
@@ -61,7 +61,7 @@ export async function runWeeklyAgentLoop(
     model,
     system: systemPrompt,
     prompt:
-      "Please retrieve and analyze the past week's daily trend reports from Product Hunt, Hacker News, and GitHub Trending. Synthesize them into per-site weekly summaries and a comprehensive bilingual weekly report for indie developers.",
+      "Please retrieve and analyze the past week's daily trend reports from Product Hunt, Hacker News, GitHub Trending, and Google Trends. Synthesize them into per-site weekly summaries and a comprehensive bilingual weekly report for indie developers.",
     tools: tools as Parameters<typeof generateText>[0]["tools"],
     maxSteps,
     onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
@@ -90,7 +90,7 @@ export async function runWeeklyAggregation(
     model,
     system: WEEKLY_SYSTEM_PROMPT,
     prompt:
-      "Please retrieve and analyze the past week's daily trend reports from Product Hunt, Hacker News, and GitHub Trending. Synthesize them into per-site weekly summaries and a comprehensive bilingual weekly report for indie developers.",
+      "Please retrieve and analyze the past week's daily trend reports from Product Hunt, Hacker News, GitHub Trending, and Google Trends. Synthesize them into per-site weekly summaries and a comprehensive bilingual weekly report for indie developers.",
     tools,
     maxSteps: WEEKLY_MAX_STEPS,
     onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
@@ -130,7 +130,7 @@ export async function runWeeklyAggregation(
       await fillMissingWeeklySiteSummary(db, model, weekStartDate, site, dailyResult.results ?? []);
     }
   } else {
-    console.log("[validate:weekly] All 3 site summaries present");
+    console.log("[validate:weekly] All 4 site summaries present");
   }
 }
 

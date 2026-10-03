@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Trend Catcher** (猎趋) is an AI-powered daily and weekly trend aggregator for indie developers. It scrapes Product Hunt, Hacker News, and GitHub Trending every day, generates bilingual (EN/ZH) summaries via an LLM agent loop, and delivers daily reports via email and a web dashboard. Every Sunday, it synthesizes the past week's daily reports into a weekly trend report.
+**Trend Catcher** (猎趋) is an AI-powered daily and weekly trend aggregator for indie developers. It scrapes Product Hunt, Hacker News, GitHub Trending, and Google Trends every day, generates bilingual (EN/ZH) summaries via an LLM agent loop, and delivers daily reports via email and a web dashboard. Every Sunday, it synthesizes the past week's daily reports into a weekly trend report.
 
 - **Runtime**: Cloudflare Workers
 - **Web framework**: Hono.js (JSX server-side rendering)
@@ -37,7 +37,7 @@ Container Orchestrator (aggregator/container.ts)
 Container HTTP Server (container/server.ts)
   → Receives raw scraped data + DeepSeek API key via POST /aggregate
   → Creates in-memory agent tools (no D1 access needed)
-  → Runs LLM agent loop: getRawDataByWebsite → webSearch → saveSiteSummary → saveFinalReport
+  → Runs LLM agent loop: getRawDataByWebsite → webSearch / googleSuggest → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
 Orchestrator saves to D1 + performs post-aggregation validation (fillMissingSiteSummary)
@@ -89,7 +89,7 @@ Routes are split into two Hono sub-apps mounted in `src/index.tsx`:
 - **DeepSeek cache optimization**: System prompt and first user message are completely static (no dates, no dynamic data). Only tool results contain dynamic content. This maximizes prefix cache hits and reduces API costs.
 - **Idempotency**: Queue consumer checks `status === 'pending'` before processing. Tasks use `INSERT OR IGNORE`.
 - **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation.
-- **Post-aggregation validation**: After daily aggregation, `fillMissingSiteSummary()` checks all 3 sites have summaries. Missing ones are regenerated individually.
+- **Post-aggregation validation**: After daily aggregation, `fillMissingSiteSummary()` checks all 4 sites have summaries. Missing ones are regenerated individually.
 - **Weekly waits for daily completion**: The weekly task `msg.retry()`s until Sunday's daily scrape tasks finish, ensuring all 7 days of data exist before aggregation.
 - **Weekly as pure synthesis**: The weekly system does NOT scrape. It reads 7 pre-generated daily summaries and synthesizes them into a cross-week trend report.
 - **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). They are shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.
@@ -144,7 +144,8 @@ trend-catcher/
     │   └── processors/
     │       ├── producthunt.ts # Atom RSS feed parser (Cloudflare blocks HTML)
     │       ├── hackernews.ts  # Firebase API (free, no auth)
-    │       └── github.ts      # cheerio HTML scraper
+    │       ├── github.ts      # cheerio HTML scraper
+    │       └── googletrends.ts# Google Trends RSS feed + Autocomplete API
     ├── aggregator/
     │   ├── llm.ts             # DeepSeek provider setup
     │   ├── tools.ts           # Agent tools (createAgentTools for Worker, createInMemoryAgentTools for Container)

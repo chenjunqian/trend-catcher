@@ -25,6 +25,7 @@ const SITE_LABELS: Record<string, string> = {
   producthunt: "Product Hunt",
   hackernews: "Hacker News",
   github: "GitHub Trending",
+  googletrends: "Google Trends",
 };
 
 function getReportDate(summary: DailySummary | WeeklySummary, isWeekly?: boolean): string {
@@ -35,6 +36,11 @@ function getReportDate(summary: DailySummary | WeeklySummary, isWeekly?: boolean
 const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
   const siteSummaries = parseSiteSummaries(summary.site_summaries);
   const displayDate = getReportDate(summary, isWeekly);
+
+  const entries = Object.entries(siteSummaries);
+  const supplyEntries = entries.filter(([site]) => site !== "googletrends");
+  const demandEntry = siteSummaries["googletrends"];
+  const hasSummaries = entries.length > 0;
 
   return (
     <Layout title={`${displayDate}`} lang={lang} path={path}>
@@ -49,22 +55,46 @@ const Report: FC<ReportProps> = ({ summary, lang, path, isWeekly }) => {
         <h1 class="report-date">{displayDate}</h1>
       </header>
 
-      {Object.keys(siteSummaries).length > 0 && (
-        <section>
+      {hasSummaries && (
+        <section class="summaries-container">
           <h2 class="section-title">
             {t(lang, "report.site_summaries")}
           </h2>
-          <div class="site-grid">
-            {Object.entries(siteSummaries).map(([website, entry]) => (
-              <article class="site-card" key={website}>
-                <h3 class="site-name">{SITE_LABELS[website] || website}</h3>
+
+          {supplyEntries.length > 0 && (
+            <div class="summary-zone supply-zone">
+              <div class="zone-header">
+                <span class="zone-title">{t(lang, "report.supply_section")}</span>
+              </div>
+              <div class="site-grid">
+                {supplyEntries.map(([website, entry]) => (
+                  <article class="site-card" key={website}>
+                    <h3 class="site-name">{SITE_LABELS[website] || website}</h3>
+                    <ReportContent
+                      className="site-body"
+                      html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)}
+                    />
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {demandEntry && (
+            <div class="summary-zone demand-zone">
+              <div class="zone-header">
+                <span class="zone-title">{t(lang, "report.demand_section")}</span>
+                <span class="tag tag--demand">{t(lang, "report.demand_badge")}</span>
+              </div>
+              <article class="site-card demand-card">
+                <h3 class="site-name">{SITE_LABELS.googletrends || "Google Trends"}</h3>
                 <ReportContent
-                  className="site-body"
-                  html={renderMarkdown(lang === "zh" ? entry.zh : entry.en)}
+                  className="site-body demand-body"
+                  html={renderMarkdown(lang === "zh" ? demandEntry.zh : demandEntry.en)}
                 />
               </article>
-            ))}
-          </div>
+            </div>
+          )}
         </section>
       )}
 

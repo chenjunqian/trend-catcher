@@ -12,22 +12,24 @@ import {
 export const SYSTEM_PROMPT = `You are a professional product trend analyst specializing in providing daily trend insights for indie developers.
 
 Your tools and workflow:
-1. Use getRawDataByWebsite to retrieve raw data from ALL three websites: producthunt, hackernews, github. You MUST call it 3 times.
+1. Use getRawDataByWebsite to retrieve raw data from ALL four websites: producthunt, hackernews, github, googletrends. You MUST call it 4 times.
 
-2. Review the raw data from each website. For the most promising/interesting products and topics, use webSearch to research them deeply — look for product details, launch context, market positioning, competitor landscape, community reception, and business model. Use at least 3-5 webSearch calls per website to gather rich context.
+2. Review the raw data from each website. For the most promising/interesting products, topics, and search trends:
+- Use webSearch to research them deeply — look for product details, launch context, market positioning, competitor landscape, community reception, and business model. Use at least 3-5 webSearch calls per website to gather rich context.
+- Use googleSuggest to explore real-time search queries and long-tail keyword variations for key products or trends to gauge user search intent and market demand.
 
-3. Analyze the data for each website and identify up to 10 noteworthy products or topics per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], etc. Format each item on its own Markdown bullet list line: "- [Category] [Name](URL) — description". Do NOT write prose paragraphs. ALWAYS use Markdown link format [Name](URL) from the raw data. Incorporate insights from webSearch into each item's description.
+3. Analyze the data for each website and identify up to 10 noteworthy products, topics, or search trends per site. Tag each with a category: [AI], [SaaS], [DevTools], [Open Source], [Design], [Mobile], [CLI], [Framework], [Security], [Infrastructure], [Data], [No-Code], [Productivity], [Search Trends], etc. Format each item on its own Markdown bullet list line: "- [Category] [Name](URL) — description". Do NOT write prose paragraphs. ALWAYS use Markdown link format [Name](URL) from the raw data. Incorporate insights from webSearch and googleSuggest into each item's description.
 
-4. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 3 saveSiteSummary calls — one for producthunt, one for hackernews, one for github. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links.
+4. Use saveSiteSummary to save a summary for EACH website individually. CRITICAL: You MUST make exactly 4 saveSiteSummary calls — one for producthunt, one for hackernews, one for github, one for googletrends. Do NOT skip any website. Each call must include BOTH English (summaryEn) and Chinese (summaryZh), each 400-600 characters. List up to 10 items per site with [Category] tags and Markdown links.
 
-5. After ALL 3 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. This should be a ~15-minute read for indie developers. Structure the report with sections: (a) Cross-Website Trend Synthesis — what themes appear across sites, (b) Product Deep Dives — commentary and analysis on 3-5 standout products with webSearch insights, (c) Market Implications — what these trends mean for indie developers, (d) Actionable Opportunities — specific ideas and advice for builders.
+5. After ALL 4 saveSiteSummary calls are complete, use saveFinalReport to save the final overall report in BOTH English (reportEn) and Chinese (reportZh), each 1500-3000 characters in Markdown format. This should be a ~15-minute read for indie developers. Structure the report with sections: (a) Cross-Platform Trend Synthesis — what themes appear across sites and search trends, (b) Product & Demand Deep Dives — commentary and analysis on 3-5 standout products and rising search demands with webSearch and googleSuggest insights, (c) Market & Search Implications — what these trends and user search queries mean for indie developers, (d) Actionable Niche Opportunities — specific ideas, low-competition keywords, and advice for builders.
 
 Report requirements:
 - Summaries and reports must be generated in BOTH English AND Chinese
 - Target indie developers, focusing on actionable opportunities and trends
 - Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
 - The overall report should identify cross-website commonalities, provide deep commentary on key products, market analysis, and concrete advice for indie developers
-- Use the webSearch tool extensively to enrich your analysis with real-world context
+- Use the webSearch and googleSuggest tools to enrich your analysis with real-world search demand context
 
 Translation rules for Chinese content (CRITICAL):
 - Preserve ALL product names, tool names, company names, project names, and brand names in their original English form — do NOT translate them
@@ -36,11 +38,11 @@ Translation rules for Chinese content (CRITICAL):
 - Markdown link text [Name](URL) must keep 'Name' in the original language — only translate the surrounding descriptive text
 - When unsure whether a term is a proper name, keep it in English
 
-IMPORTANT: Do not call saveFinalReport until you have completed ALL 3 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
+IMPORTANT: Do not call saveFinalReport until you have completed ALL 4 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
 
 export const MAX_STEPS = 20;
 
-const ALL_SITES = ["producthunt", "hackernews", "github"] as const;
+const ALL_SITES = ["producthunt", "hackernews", "github", "googletrends"] as const;
 
 const SUMMARY_PROMPT = `You are a trend analyst. Given the following raw trending data for a website, generate a bilingual summary.
 
@@ -121,7 +123,7 @@ export async function runAgentLoop(
     model,
     system: systemPrompt,
     prompt:
-      "Please retrieve today's trending data from Product Hunt, Hacker News, and GitHub Trending. Analyze each source, save individual site summaries in both English and Chinese, then generate a comprehensive bilingual daily report for indie developers.",
+      "Please retrieve today's trending data from Product Hunt, Hacker News, GitHub Trending, and Google Trends. Analyze each source, save individual site summaries in both English and Chinese, then generate a comprehensive bilingual daily report for indie developers.",
     tools: tools as Parameters<typeof generateText>[0]["tools"],
     maxSteps,
     onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
@@ -150,7 +152,7 @@ export async function runAggregation(
     model,
     system: SYSTEM_PROMPT,
     prompt:
-      "Please retrieve today's trending data from Product Hunt, Hacker News, and GitHub Trending. Analyze each source, save individual site summaries in both English and Chinese, then generate a comprehensive bilingual daily report for indie developers.",
+      "Please retrieve today's trending data from Product Hunt, Hacker News, GitHub Trending, and Google Trends. Analyze each source, save individual site summaries in both English and Chinese, then generate a comprehensive bilingual daily report for indie developers.",
     tools,
     maxSteps: MAX_STEPS,
     onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
@@ -164,7 +166,7 @@ export async function runAggregation(
     },
   });
 
-  // Post-validation: ensure all 3 sites have summaries
+  // Post-validation: ensure all 4 sites have summaries
   console.log("[validate] Checking site summaries...");
   const summary = await getSummaryByDate(db, date);
   if (!summary) {
@@ -196,7 +198,7 @@ export async function runAggregation(
       } catch { /* ignore */ }
     }
   } else {
-    console.log("[validate] ✅ All 3 site summaries present");
+    console.log("[validate] ✅ All 4 site summaries present");
   }
 }
 

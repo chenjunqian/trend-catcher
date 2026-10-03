@@ -49,6 +49,7 @@ function mockD1() {
         producthunt: { en: "PH EN", zh: "PH ZH" },
         hackernews: { en: "HN EN", zh: "HN ZH" },
         github: { en: "GH EN", zh: "GH ZH" },
+        googletrends: { en: "GT EN", zh: "GT ZH" },
       }),
       full_report_en: "report en",
       full_report_zh: "report zh",
@@ -104,6 +105,8 @@ describe("runAggregation", () => {
     expect(callArgs.system).toContain("producthunt");
     expect(callArgs.system).toContain("hackernews");
     expect(callArgs.system).toContain("github");
+    expect(callArgs.system).toContain("googletrends");
+    expect(callArgs.system).toContain("googleSuggest");
     expect(callArgs.system).toContain("English");
     expect(callArgs.system).toContain("Chinese");
     expect(callArgs.system).toContain("webSearch");

@@ -141,6 +141,24 @@ describe("createInMemoryWeeklyAgentTools", () => {
     });
   });
 
+  describe("googleSuggest", () => {
+    it("delegates to fetchGoogleAutocomplete and returns suggestions", async () => {
+      globalThis.fetch = vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(["niche idea", ["niche idea generator", "niche idea validation"]]),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        )
+      ) as typeof globalThis.fetch;
+
+      const { tools } = createInMemoryWeeklyAgentTools(weekStartDate, []);
+      const result = await tools.googleSuggest.execute({ query: "niche idea" }, execOpts);
+      expect(result.query).toBe("niche idea");
+      expect(result.suggestions).toHaveLength(2);
+    });
+  });
+
   describe("getResults", () => {
     it("returns empty state initially", () => {
       const { getResults } = createInMemoryWeeklyAgentTools(weekStartDate, []);

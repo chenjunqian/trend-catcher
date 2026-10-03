@@ -55,6 +55,21 @@ describe("createAgentTools", () => {
       const result = await tools.getRawDataByWebsite.execute({ website: "github" }, execOpts);
       expect(result.items).toHaveLength(1);
     });
+
+    it("returns googletrends data when tasks are completed", async () => {
+      const s = newStmt();
+      s.all.mockResolvedValue({
+        results: [
+          { raw_data: JSON.stringify([{ title: "deepseek", approxTraffic: "50K+" }]) },
+        ],
+      });
+      const m = mockD1(s);
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      const result = await tools.getRawDataByWebsite.execute({ website: "googletrends" }, execOpts);
+      expect(result.website).toBe("googletrends");
+      expect(result.items).toHaveLength(1);
+    });
   });
 
   describe("saveSiteSummary", () => {
@@ -71,6 +86,19 @@ describe("createAgentTools", () => {
       expect(result.website).toBe("producthunt");
     });
 
+    it("saves a summary for googletrends", async () => {
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      const result = await tools.saveSiteSummary.execute({
+        website: "googletrends",
+        summaryEn: "Search trends",
+        summaryZh: "搜索趋势",
+      }, execOpts);
+      expect(result.success).toBe(true);
+      expect(result.website).toBe("googletrends");
+    });
+
     it("merges with existing site summaries", async () => {
       const s = newStmt();
       s.first
@@ -85,6 +113,27 @@ describe("createAgentTools", () => {
         summaryZh: "新的 PH",
       }, execOpts);
       expect(s.first).toHaveBeenCalled();
+    });
+  });
+
+  describe("googleSuggest", () => {
+    it("returns autocomplete suggestions", async () => {
+      globalThis.fetch = vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(["cursor", ["cursor ai", "cursor alternative"]]),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        )
+      ) as typeof globalThis.fetch;
+
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      const result = await tools.googleSuggest.execute({ query: "cursor" }, execOpts);
+      expect(result.query).toBe("cursor");
+      expect(result.suggestions).toEqual(["cursor ai", "cursor alternative"]);
+      expect(result.totalSuggestions).toBe(2);
     });
   });
 
