@@ -129,6 +129,9 @@ describe("runAggregation", () => {
     expect(callArgs.system).toContain("400-600");
     expect(callArgs.system).toContain("1500-3000");
     expect(callArgs.system).toContain("[Category]");
+    expect(callArgs.system).toContain("sports");
+    expect(callArgs.system).toContain("pain points");
+    expect(callArgs.system).toContain("non-technical");
   });
 
   it("uses prompt instructing bilingual output", async () => {

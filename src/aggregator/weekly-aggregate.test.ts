@@ -74,6 +74,9 @@ describe("WEEKLY_SYSTEM_PROMPT", () => {
     expect(WEEKLY_SYSTEM_PROMPT).toContain("Standout Products");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("Cross-Domain Patterns");
     expect(WEEKLY_SYSTEM_PROMPT).toContain("Indie Developer Insights");
+    expect(WEEKLY_SYSTEM_PROMPT).toContain("sports");
+    expect(WEEKLY_SYSTEM_PROMPT).toContain("pain points");
+    expect(WEEKLY_SYSTEM_PROMPT).toContain("non-technical");
   });
 });
 

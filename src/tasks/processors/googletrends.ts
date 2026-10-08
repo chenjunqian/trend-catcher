@@ -15,54 +15,71 @@ export interface GoogleTrendsItem {
   newsItems: GoogleTrendsNewsItem[];
 }
 
-export async function fetchGoogleTrends(geo: string = "US"): Promise<GoogleTrendsItem[]> {
-  const xml = await fetchHtml(`https://trends.google.com/trending/rss?geo=${encodeURIComponent(geo)}`);
+export const DEFAULT_SEARCH_SEEDS = [
+  "software for contractors",
+  "software for photographers",
+  "software for property management",
+  "software for therapists",
+  "app for realtors",
+  "booking system for",
+  "invoicing tool for",
+  "simple crm for",
+  "scheduling app for clients",
+  "alternative to docusign for small business",
+  "alternative to quickbooks for small business",
+  "alternative to calendly",
+  "ai app for interior design",
+  "ai tool for teachers",
+  "ai tool for marketing",
+] as const;
+
+export async function fetchGoogleTrends(
+  geo: string = "US",
+  seeds: readonly string[] = DEFAULT_SEARCH_SEEDS
+): Promise<GoogleTrendsItem[]> {
+  const geoLower = geo.toLowerCase();
+  const seedResults = await Promise.allSettled(
+    seeds.map((seed) => fetchGoogleAutocomplete(seed, "en", geoLower))
+  );
+
   const items: GoogleTrendsItem[] = [];
+  const seenTitles = new Set<string>();
+  const now = new Date().toUTCString();
 
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-  let itemMatch: RegExpExecArray | null;
+  for (let i = 0; i < seeds.length; i++) {
+    const seed = seeds[i];
+    const res = seedResults[i];
+    if (res.status !== "fulfilled") continue;
 
-  while ((itemMatch = itemRegex.exec(xml)) !== null) {
-    const itemXml = itemMatch[1];
-
-    const title = extractTag(itemXml, "title");
-    if (!title) continue;
-
-    const approxTraffic = extractTag(itemXml, "ht:approx_traffic");
-    const pubDate = extractTag(itemXml, "pubDate");
-    const exploreLink = `https://trends.google.com/trends/explore?q=${encodeURIComponent(title).replace(/%20/g, "+")}&geo=${encodeURIComponent(geo)}`;
-
-    const newsItems: GoogleTrendsNewsItem[] = [];
-    const newsRegex = /<ht:news_item>([\s\S]*?)<\/ht:news_item>/g;
-    let newsMatch: RegExpExecArray | null;
-
-    while ((newsMatch = newsRegex.exec(itemXml)) !== null) {
-      const newsXml = newsMatch[1];
-      const newsTitle = extractTag(newsXml, "ht:news_item_title");
-      const snippet = extractTag(newsXml, "ht:news_item_snippet");
-      const url = extractTag(newsXml, "ht:news_item_url");
-      const source = extractTag(newsXml, "ht:news_item_source");
-
-      if (newsTitle || url) {
-        newsItems.push({
-          title: decodeEntities(newsTitle),
-          snippet: decodeEntities(snippet),
-          url,
-          source: decodeEntities(source),
-        });
+    for (const suggestion of res.value) {
+      const normalized = suggestion.trim().toLowerCase();
+      if (!normalized || normalized === seed.toLowerCase() || seenTitles.has(normalized)) {
+        continue;
       }
-    }
 
-    items.push({
-      title: decodeEntities(title),
-      approxTraffic,
-      link: exploreLink,
-      pubDate,
-      newsItems,
-    });
+      seenTitles.add(normalized);
+
+      const exploreLink = `https://trends.google.com/trends/explore?q=${encodeURIComponent(suggestion).replace(/%20/g, "+")}&geo=${encodeURIComponent(geo)}`;
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(suggestion)}`;
+
+      items.push({
+        title: suggestion,
+        approxTraffic: "High Intent",
+        link: exploreLink,
+        pubDate: now,
+        newsItems: [
+          {
+            title: `Search demand for "${suggestion}"`,
+            snippet: `High-intent user search query discovered via seed pattern "${seed}".`,
+            url: searchUrl,
+            source: "Google Search Intent",
+          },
+        ],
+      });
+    }
   }
 
-  return items.slice(0, 20);
+  return items.slice(0, 25);
 }
 
 export async function fetchGoogleAutocomplete(
@@ -90,19 +107,4 @@ export async function fetchGoogleAutocomplete(
   } catch {
     return [];
   }
-}
-
-function extractTag(xml: string, tag: string): string {
-  const match = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, "i").exec(xml);
-  return match ? match[1].trim() : "";
-}
-
-function decodeEntities(html: string): string {
-  return html
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'");
 }
