@@ -4,6 +4,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { createDeepSeekModel } from "./llm";
 import { createWeeklyAgentTools } from "./tools";
 import type { SiteSummaryEntry } from "./tools";
+import type { SummaryCompleteness } from "./aggregate";
 import {
   getWeeklySummaryByDate,
   getDailySummariesForWeek,
@@ -104,34 +105,58 @@ export async function runWeeklyAggregation(
     },
   });
 
+  const status = await ensureCompleteWeeklySummary(db, model, weekStartDate);
+  if (!status.complete) {
+    throw new Error(
+      `Weekly summary incomplete for ${weekStartDate}: missing sites [${status.missingSites.join(", ") || "none"}]${status.missingReport ? ", missing full report" : ""}`
+    );
+  }
+}
+
+export async function ensureCompleteWeeklySummary(
+  db: D1Database,
+  model: ReturnType<typeof createDeepSeekModel>,
+  weekStartDate: string
+): Promise<SummaryCompleteness> {
   console.log("[validate:weekly] Checking site summaries...");
   const summary = await getWeeklySummaryByDate(db, weekStartDate);
   if (!summary) {
-    console.log("[validate:weekly] No weekly_summaries row found at all");
-    return;
+    console.log("[validate:weekly] ⚠️ No weekly_summaries row found at all");
   }
 
   let existingSites: Record<string, SiteSummaryEntry> = {};
-  if (summary.site_summaries) {
+  if (summary?.site_summaries) {
     try { existingSites = JSON.parse(summary.site_summaries); } catch { /* ignore */ }
   }
 
-  const found = Object.keys(existingSites);
   const missing = ALL_SITES.filter((s) => !existingSites[s]);
-  console.log(`[validate:weekly] Found: [${found.join(", ") || "none"}] | Missing: [${missing.join(", ") || "none"}]`);
+  console.log(`[validate:weekly] Found: [${Object.keys(existingSites).join(", ") || "none"}] | Missing: [${missing.join(", ") || "none"}]`);
 
   if (missing.length > 0) {
     console.log(`[validate:weekly] Backfilling ${missing.length} missing site summaries...`);
     const weekDates = getDateRangeForWeek(weekStartDate);
-    const weekEndDate = weekDates[6];
-    const dailyResult = await getDailySummariesForWeek(db, weekStartDate, weekEndDate);
+    const dailyResult = await getDailySummariesForWeek(db, weekStartDate, weekDates[6]);
 
     for (const site of missing) {
       await fillMissingWeeklySiteSummary(db, model, weekStartDate, site, dailyResult.results ?? []);
     }
-  } else {
-    console.log("[validate:weekly] All 4 site summaries present");
   }
+
+  const verify = await getWeeklySummaryByDate(db, weekStartDate);
+  let verifiedSites: Record<string, SiteSummaryEntry> = {};
+  if (verify?.site_summaries) {
+    try { verifiedSites = JSON.parse(verify.site_summaries); } catch { /* ignore */ }
+  }
+
+  const missingSites = ALL_SITES.filter((s) => !verifiedSites[s]);
+  const missingReport = !verify?.full_report_en || !verify?.full_report_zh;
+  console.log(`[validate:weekly] After backfill: [${Object.keys(verifiedSites).join(", ") || "none"}] | Report: ${missingReport ? "missing" : "present"}`);
+
+  return {
+    complete: missingSites.length === 0 && !missingReport,
+    missingSites: [...missingSites],
+    missingReport,
+  };
 }
 
 async function fillMissingWeeklySiteSummary(

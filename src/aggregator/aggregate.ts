@@ -40,7 +40,7 @@ Translation rules for Chinese content (CRITICAL):
 
 IMPORTANT: Do not call saveFinalReport until you have completed ALL 4 saveSiteSummary calls. If you skip a website's site summary, the final report will be incomplete.`;
 
-export const MAX_STEPS = 20;
+export const MAX_STEPS = 35;
 
 const ALL_SITES = ["producthunt", "hackernews", "github", "googletrends"] as const;
 
@@ -166,39 +166,60 @@ export async function runAggregation(
     },
   });
 
-  // Post-validation: ensure all 4 sites have summaries
+  const status = await ensureCompleteSummary(db, model, date);
+  if (!status.complete) {
+    throw new Error(
+      `Daily summary incomplete for ${date}: missing sites [${status.missingSites.join(", ") || "none"}]${status.missingReport ? ", missing full report" : ""}`
+    );
+  }
+}
+
+export interface SummaryCompleteness {
+  complete: boolean;
+  missingSites: string[];
+  missingReport: boolean;
+}
+
+export async function ensureCompleteSummary(
+  db: D1Database,
+  model: ReturnType<typeof createDeepSeekModel>,
+  date: string
+): Promise<SummaryCompleteness> {
   console.log("[validate] Checking site summaries...");
   const summary = await getSummaryByDate(db, date);
   if (!summary) {
     console.log("[validate] ⚠️ No daily_summaries row found at all");
-    return;
   }
 
   let existingSites: Record<string, SiteSummaryEntry> = {};
-  if (summary.site_summaries) {
+  if (summary?.site_summaries) {
     try { existingSites = JSON.parse(summary.site_summaries); } catch { /* ignore */ }
   }
 
-  const found = Object.keys(existingSites);
   const missing = ALL_SITES.filter((s) => !existingSites[s]);
-  console.log(`[validate] Found: [${found.join(", ") || "none"}] | Missing: [${missing.join(", ") || "none"}]`);
+  console.log(`[validate] Found: [${Object.keys(existingSites).join(", ") || "none"}] | Missing: [${missing.join(", ") || "none"}]`);
 
   if (missing.length > 0) {
     console.log(`[validate] Backfilling ${missing.length} missing site summaries...`);
     for (const site of missing) {
       await fillMissingSiteSummary(db, model, date, site);
     }
-
-    // Re-read to confirm
-    const verify = await getSummaryByDate(db, date);
-    if (verify?.site_summaries) {
-      try {
-        const v = JSON.parse(verify.site_summaries);
-        console.log(`[validate] After backfill: [${Object.keys(v).join(", ")}]`);
-      } catch { /* ignore */ }
-    }
-  } else {
-    console.log("[validate] ✅ All 4 site summaries present");
   }
+
+  const verify = await getSummaryByDate(db, date);
+  let verifiedSites: Record<string, SiteSummaryEntry> = {};
+  if (verify?.site_summaries) {
+    try { verifiedSites = JSON.parse(verify.site_summaries); } catch { /* ignore */ }
+  }
+
+  const missingSites = ALL_SITES.filter((s) => !verifiedSites[s]);
+  const missingReport = !verify?.full_report_en || !verify?.full_report_zh;
+  console.log(`[validate] After backfill: [${Object.keys(verifiedSites).join(", ") || "none"}] | Report: ${missingReport ? "missing" : "present"}`);
+
+  return {
+    complete: missingSites.length === 0 && !missingReport,
+    missingSites: [...missingSites],
+    missingReport,
+  };
 }
 

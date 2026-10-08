@@ -27,7 +27,11 @@ Cron Trigger (UTC 0:00 / 8:00 AM Beijing)
 Queue Consumer (concurrent, up to 5-min execution)
   → processors/*.ts: scrapes each website
   → Updates D1 task status to completed
-  → When all tasks done → triggers container aggregation
+  → When all tasks done → enqueues a type:"aggregate" message (no fire-and-forget work)
+      ↓
+Queue Consumer (aggregate message)
+  → triggerAggregation(): container first, Worker fallback second
+  → Rethrows when both fail so the queue retries the aggregate message
       ↓
 Container Orchestrator (aggregator/container.ts)
   → getContainer() → DurableObjectStub for AggregatorContainer
@@ -40,7 +44,8 @@ Container HTTP Server (container/server.ts)
   → Runs LLM agent loop: getRawDataByWebsite → webSearch / googleSuggest → saveSiteSummary → saveFinalReport
   → Returns { siteSummaries, reportEn, reportZh } back to orchestrator
       ↓
-Orchestrator saves to D1 + performs post-aggregation validation (fillMissingSiteSummary)
+Orchestrator saves to D1 + performs post-aggregation validation (ensureCompleteSummary,
+backfills missing site summaries) and throws if the summary is still incomplete
       + sends email to all confirmed subscribers via Cloudflare Email Send
       ↓
 Web Dashboard (Hono JSX)
@@ -88,8 +93,8 @@ Routes are split into two Hono sub-apps mounted in `src/index.tsx`:
 
 - **DeepSeek cache optimization**: System prompt and first user message are completely static (no dates, no dynamic data). Only tool results contain dynamic content. This maximizes prefix cache hits and reduces API costs.
 - **Idempotency**: Queue consumer checks `status === 'pending'` before processing. Tasks use `INSERT OR IGNORE`.
-- **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation.
-- **Post-aggregation validation**: After daily aggregation, `fillMissingSiteSummary()` checks all 4 sites have summaries. Missing ones are regenerated individually.
+- **Completion detection**: After each batch, checks `getPendingTaskCountForDate()`. Failed tasks don't block aggregation. When the count reaches zero, an `aggregate` queue message is enqueued; the queue retries it on failure instead of losing the aggregation in a fire-and-forget `waitUntil`.
+- **Post-aggregation validation**: `ensureCompleteSummary()` runs after both the container and Worker-fallback paths, backfills any missing site summaries individually, and the aggregation throws (triggering queue retry) if sites or the full report are still missing.
 - **Weekly waits for daily completion**: The weekly task `msg.retry()`s until Sunday's daily scrape tasks finish, ensuring all 7 days of data exist before aggregation.
 - **Weekly as pure synthesis**: The weekly system does NOT scrape. It reads 7 pre-generated daily summaries and synthesizes them into a cross-week trend report.
 - **Container module isolation (CRITICAL)**: `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` must NOT import any Workers-only modules (`@cloudflare/containers`, `cloudflare:workers`). They are shared between the Worker and the Container (Node.js) runtime. Workers-only imports live in `src/aggregator/container.ts` which is only imported by the Worker. The IT test Phase 0 enforces this.

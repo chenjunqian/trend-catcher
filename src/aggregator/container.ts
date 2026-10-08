@@ -7,6 +7,9 @@ import {
   upsertWeeklySummary,
 } from "../db/client";
 import { getDateRangeForWeek } from "../utils/date";
+import { createDeepSeekModel } from "./llm";
+import { ensureCompleteSummary } from "./aggregate";
+import { ensureCompleteWeeklySummary } from "./weekly-aggregate";
 import type { EmailSender } from "../notifier/email";
 
 function isNonRetryableError(errorText: string): boolean {
@@ -119,7 +122,15 @@ export async function triggerContainerAggregation(
     full_report_zh: containerResult.reportZh,
   });
 
-  console.log("[container-orch] Saved to D1, sending email");
+  const model = createDeepSeekModel(deepseekApiKey);
+  const completeness = await ensureCompleteSummary(db, model, date);
+  if (!completeness.complete) {
+    throw new Error(
+      `Container aggregation incomplete for ${date}: missing sites [${completeness.missingSites.join(", ") || "none"}]${completeness.missingReport ? ", missing full report" : ""}`
+    );
+  }
+
+  console.log("[container-orch] Summary validated, sending email");
 
   const baseUrl = "https://trendcatcher.guoshaotech.com";
   const { sendDailyEmail } = await import("../notifier/email");
@@ -186,7 +197,15 @@ export async function triggerWeeklyContainerAggregation(
     full_report_zh: containerResult.reportZh,
   });
 
-  console.log("[container-orch:weekly] Saved to D1, sending email");
+  const model = createDeepSeekModel(deepseekApiKey);
+  const completeness = await ensureCompleteWeeklySummary(db, model, weekStartDate);
+  if (!completeness.complete) {
+    throw new Error(
+      `Weekly container aggregation incomplete for ${weekStartDate}: missing sites [${completeness.missingSites.join(", ") || "none"}]${completeness.missingReport ? ", missing full report" : ""}`
+    );
+  }
+
+  console.log("[container-orch:weekly] Summary validated, sending email");
 
   const baseUrl = "https://trendcatcher.guoshaotech.com";
   const { sendWeeklyEmail } = await import("../notifier/email");

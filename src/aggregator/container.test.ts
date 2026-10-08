@@ -4,6 +4,18 @@ vi.mock("@cloudflare/containers", () => ({
   getContainer: vi.fn(),
 }));
 
+vi.mock("./llm", () => ({
+  createDeepSeekModel: vi.fn(() => ({})),
+}));
+
+vi.mock("./aggregate", () => ({
+  ensureCompleteSummary: vi.fn().mockResolvedValue({ complete: true, missingSites: [], missingReport: false }),
+}));
+
+vi.mock("./weekly-aggregate", () => ({
+  ensureCompleteWeeklySummary: vi.fn().mockResolvedValue({ complete: true, missingSites: [], missingReport: false }),
+}));
+
 vi.mock("../notifier/email", () => ({
   sendDailyEmail: vi.fn(),
   sendWeeklyEmail: vi.fn(),
@@ -11,6 +23,8 @@ vi.mock("../notifier/email", () => ({
 
 import { getContainer } from "@cloudflare/containers";
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "./container";
+import { ensureCompleteSummary } from "./aggregate";
+import { ensureCompleteWeeklySummary } from "./weekly-aggregate";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
 import type { EmailSender } from "../notifier/email";
@@ -269,6 +283,109 @@ describe("triggerWeeklyContainerAggregation", () => {
     ).rejects.toThrow("Container port connection closed unexpectedly");
 
     expect(stub.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("triggerContainerAggregation — completeness validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const deepseekApiKey = "sk-test";
+  const emailSender = mockEmailSender();
+  const date = "2026-06-01";
+
+  function mockContainerSuccess(siteSummaries: Record<string, { en: string; zh: string }>) {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [{ raw_data: JSON.stringify({ title: "item" }), website: "producthunt" }],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const stub = { fetch: vi.fn() };
+    stub.fetch.mockResolvedValue(mockContainerResponse(true, {
+      success: true,
+      siteSummaries,
+      reportEn: "Report EN",
+      reportZh: "Report ZH",
+    }));
+    vi.mocked(getContainer).mockReturnValue(stub as any);
+    return db;
+  }
+
+  it("validates completeness after saving the container result", async () => {
+    const db = mockContainerSuccess({ producthunt: { en: "PH", zh: "PH" } });
+
+    await triggerContainerAggregation(db, {}, emailSender, date, deepseekApiKey);
+
+    expect(ensureCompleteSummary).toHaveBeenCalledWith(db, expect.anything(), date);
+    expect(sendDailyEmail).toHaveBeenCalledWith(
+      db, emailSender, date, "https://trendcatcher.guoshaotech.com"
+    );
+  });
+
+  it("throws when site summaries are still incomplete after backfill", async () => {
+    const db = mockContainerSuccess({ producthunt: { en: "PH", zh: "PH" } });
+    vi.mocked(ensureCompleteSummary).mockResolvedValueOnce({
+      complete: false,
+      missingSites: ["hackernews", "github"],
+      missingReport: false,
+    });
+
+    await expect(
+      triggerContainerAggregation(db, {}, emailSender, date, deepseekApiKey)
+    ).rejects.toThrow(/incomplete/i);
+
+    expect(sendDailyEmail).not.toHaveBeenCalled();
+  });
+
+  it("throws when the full report is missing after backfill", async () => {
+    const db = mockContainerSuccess({ producthunt: { en: "PH", zh: "PH" } });
+    vi.mocked(ensureCompleteSummary).mockResolvedValueOnce({
+      complete: false,
+      missingSites: [],
+      missingReport: true,
+    });
+
+    await expect(
+      triggerContainerAggregation(db, {}, emailSender, date, deepseekApiKey)
+    ).rejects.toThrow(/incomplete/i);
+
+    expect(sendDailyEmail).not.toHaveBeenCalled();
+  });
+
+  it("validates weekly completeness after saving the weekly container result", async () => {
+    const s = newStmt();
+    s.all.mockResolvedValue({
+      results: [{
+        summary_date: "2026-06-01",
+        full_report_en: "R",
+        full_report_zh: "R",
+        site_summaries: "{}",
+      }],
+    });
+    const m = mockD1(s);
+    const db = m as unknown as D1Database;
+    const stub = { fetch: vi.fn() };
+    stub.fetch.mockResolvedValue(mockContainerResponse(true, {
+      success: true,
+      siteSummaries: { producthunt: { en: "PH", zh: "PH" } },
+      reportEn: "Weekly EN",
+      reportZh: "Weekly ZH",
+    }));
+    vi.mocked(getContainer).mockReturnValue(stub as any);
+    vi.mocked(ensureCompleteWeeklySummary).mockResolvedValueOnce({
+      complete: false,
+      missingSites: ["github"],
+      missingReport: false,
+    });
+
+    await expect(
+      triggerWeeklyContainerAggregation(db, {}, emailSender, "2026-06-01", deepseekApiKey)
+    ).rejects.toThrow(/incomplete/i);
+
+    expect(ensureCompleteWeeklySummary).toHaveBeenCalledWith(db, expect.anything(), "2026-06-01");
+    expect(sendWeeklyEmail).not.toHaveBeenCalled();
   });
 });
 

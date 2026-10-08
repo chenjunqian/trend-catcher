@@ -1,6 +1,6 @@
 // Queue consumer: processes scrape tasks, then triggers aggregation when all tasks complete.
 
-import type { D1Database, MessageBatch, DurableObjectNamespace, SendEmail } from "@cloudflare/workers-types";
+import type { D1Database, MessageBatch, DurableObjectNamespace, Queue, SendEmail } from "@cloudflare/workers-types";
 import {
   getTaskById,
   updateTaskToProcessing,
@@ -19,6 +19,7 @@ import type { TaskMessage } from "./generator";
 
 export interface Env {
   DB: D1Database;
+  SCRAPE_QUEUE: Queue<TaskMessage>;
   AGGREGATOR_CONTAINER?: DurableObjectNamespace;
   DEEPSEEK_API_KEY: string;
   EMAIL: SendEmail;
@@ -79,33 +80,22 @@ export async function queueConsumer(
   env: Env,
   ctx: ExecutionContext
 ): Promise<void> {
-  const firstMsg = batch.messages[0];
-  if (!firstMsg) return;
+  if (batch.messages.length === 0) return;
 
-  if (firstMsg.body.type === "manual-daily") {
-    const date = firstMsg.body.scheduled_date;
-    try {
-      await triggerAggregation(env, date);
-      firstMsg.ack();
-    } catch {
-      firstMsg.retry();
-    }
-    return;
-  }
-
-  if (firstMsg.body.type === "manual-weekly") {
-    const weekStartDate = firstMsg.body.scheduled_date;
-    try {
-      await triggerWeeklyAggregation(env, weekStartDate);
-      firstMsg.ack();
-    } catch {
-      firstMsg.retry();
-    }
-    return;
-  }
-
+  const dailyAggregateMessages = batch.messages.filter(
+    (m) => m.body.type === "manual-daily" || m.body.type === "aggregate"
+  );
+  const weeklyAggregateMessages = batch.messages.filter(
+    (m) => m.body.type === "manual-weekly"
+  );
   const weeklyMessages = batch.messages.filter((m) => m.body.type === "weekly");
-  const dailyMessages = batch.messages.filter((m) => m.body.type !== "weekly");
+  const dailyMessages = batch.messages.filter(
+    (m) =>
+      m.body.type !== "weekly" &&
+      m.body.type !== "manual-daily" &&
+      m.body.type !== "manual-weekly" &&
+      m.body.type !== "aggregate"
+  );
 
   // Process daily scrape tasks
   if (dailyMessages.length > 0) {
@@ -124,7 +114,29 @@ export async function queueConsumer(
     const remaining = await getPendingTaskCountForDate(env.DB, date);
 
     if (remaining === 0) {
-      ctx.waitUntil(triggerAggregation(env, date));
+      await enqueueAggregateTask(env, ctx, date);
+    }
+  }
+
+  // Process daily aggregation requests (manual or enqueued after scraping)
+  for (const msg of dailyAggregateMessages) {
+    try {
+      await triggerAggregation(env, msg.body.scheduled_date);
+      msg.ack();
+    } catch (err) {
+      console.error(`Daily aggregation failed for ${msg.body.scheduled_date}:`, err);
+      msg.retry();
+    }
+  }
+
+  // Process weekly aggregation requests
+  for (const msg of weeklyAggregateMessages) {
+    try {
+      await triggerWeeklyAggregation(env, msg.body.scheduled_date);
+      msg.ack();
+    } catch (err) {
+      console.error(`Weekly aggregation failed for ${msg.body.scheduled_date}:`, err);
+      msg.retry();
     }
   }
 
@@ -153,6 +165,30 @@ export async function queueConsumer(
   }
 }
 
+async function enqueueAggregateTask(
+  env: Env,
+  ctx: ExecutionContext,
+  date: string
+): Promise<void> {
+  try {
+    await env.SCRAPE_QUEUE.send({
+      id: `${date}_aggregate`,
+      scheduled_date: date,
+      website: "aggregate",
+      item: "aggregate",
+      type: "aggregate",
+    });
+    console.log(`Enqueued aggregate task for ${date}`);
+  } catch (err) {
+    console.error("Failed to enqueue aggregate task, running aggregation in-process:", err);
+    ctx.waitUntil(
+      triggerAggregation(env, date).catch((aggregationErr) => {
+        console.error("In-process aggregation failed:", aggregationErr);
+      })
+    );
+  }
+}
+
 async function triggerAggregation(env: Env, date: string): Promise<void> {
   try {
     console.log("All tasks completed, starting aggregation...");
@@ -164,15 +200,13 @@ async function triggerAggregation(env: Env, date: string): Promise<void> {
       date,
       env.DEEPSEEK_API_KEY
     );
+    return;
   } catch (err) {
     console.error("Container aggregation failed, falling back to direct Worker aggregation:", err);
-    try {
-      await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
-      await sendDailyEmail(env.DB, env.EMAIL, date, BASE_URL);
-    } catch (fallbackErr) {
-      console.error("Fallback aggregation failed:", fallbackErr);
-    }
   }
+
+  await runAggregation(env.DB, env.DEEPSEEK_API_KEY, date);
+  await sendDailyEmail(env.DB, env.EMAIL, date, BASE_URL);
 }
 
 async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promise<void> {
@@ -186,13 +220,11 @@ async function triggerWeeklyAggregation(env: Env, weekStartDate: string): Promis
       weekStartDate,
       env.DEEPSEEK_API_KEY
     );
+    return;
   } catch (err) {
     console.error("Weekly container aggregation failed, falling back to direct Worker weekly aggregation:", err);
-    try {
-      await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
-      await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
-    } catch (fallbackErr) {
-      console.error("Fallback weekly aggregation failed:", fallbackErr);
-    }
   }
+
+  await runWeeklyAggregation(env.DB, env.DEEPSEEK_API_KEY, weekStartDate);
+  await sendWeeklyEmail(env.DB, env.EMAIL, weekStartDate, BASE_URL);
 }

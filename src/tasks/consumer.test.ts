@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { MessageBatch, SendEmail } from "@cloudflare/workers-types";
+import type { MessageBatch, Queue, SendEmail } from "@cloudflare/workers-types";
 import { queueConsumer, type Env } from "./consumer";
 import type { TaskMessage } from "./generator";
 import { mockD1, newStmt } from "../test-utils/d1-mock";
@@ -59,12 +59,25 @@ function mockEmail(): SendEmail {
   } as unknown as SendEmail;
 }
 
-function mockEnv(): Env {
+function mockQueue(): Queue<TaskMessage> {
   return {
-    DB: mockD1() as unknown as D1Database,
+    send: vi.fn().mockResolvedValue(undefined),
+    sendBatch: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Queue<TaskMessage>;
+}
+
+function mockEnvWith(db: unknown, extra: Partial<Env> = {}): Env {
+  return {
+    DB: db as D1Database,
+    SCRAPE_QUEUE: mockQueue(),
     DEEPSEEK_API_KEY: "sk-test",
     EMAIL: mockEmail(),
+    ...extra,
   };
+}
+
+function mockEnv(): Env {
+  return mockEnvWith(mockD1());
 }
 
 describe("queueConsumer — manual-daily messages", () => {
@@ -214,11 +227,7 @@ describe("queueConsumer — weekly messages", () => {
       type: "weekly",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const ctx = mockCtx();
     const batch = makeBatch([makeMsg(weeklyMsg)]);
@@ -241,11 +250,7 @@ describe("queueConsumer — weekly messages", () => {
       type: "weekly",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const batch = makeBatch([makeMsg(weeklyMsg)]);
     await queueConsumer(batch, env, mockCtx());
@@ -265,12 +270,7 @@ describe("queueConsumer — weekly messages", () => {
       type: "weekly",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-      AGGREGATOR_CONTAINER: {} as unknown as DurableObjectNamespace,
-    };
+    const env = mockEnvWith(m, { AGGREGATOR_CONTAINER: {} as unknown as DurableObjectNamespace });
 
     const batch = makeBatch([makeMsg(weeklyMsg)]);
     await queueConsumer(batch, env, mockCtx());
@@ -293,11 +293,7 @@ describe("queueConsumer — weekly messages", () => {
       type: "weekly",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const msg = makeMsg(weeklyMsg);
     const batch = makeBatch([msg]);
@@ -310,14 +306,93 @@ describe("queueConsumer — weekly messages", () => {
 
   it("handles empty batch gracefully", async () => {
     const m = mockD1();
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const batch = makeBatch([]);
     await expect(queueConsumer(batch, env, mockCtx())).resolves.toBeUndefined();
+  });
+});
+
+describe("queueConsumer — aggregate messages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function aggregateMsg(date = "2026-06-01") {
+    return makeMsg({
+      id: `${date}_aggregate`,
+      scheduled_date: date,
+      website: "aggregate",
+      item: "aggregate",
+      type: "aggregate",
+    });
+  }
+
+  it("runs aggregation and acks the aggregate message on success", async () => {
+    const env = mockEnv();
+    const msg = aggregateMsg();
+
+    await queueConsumer(makeBatch([msg]), env, mockCtx());
+
+    expect(triggerContainerAggregation).toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
+  });
+
+  it("retries the aggregate message when both container and worker aggregation fail", async () => {
+    vi.mocked(triggerContainerAggregation).mockRejectedValueOnce(new Error("container down"));
+    vi.mocked(runAggregation).mockRejectedValueOnce(new Error("llm down"));
+
+    const env = mockEnv();
+    const msg = aggregateMsg();
+
+    await queueConsumer(makeBatch([msg]), env, mockCtx());
+
+    expect(runAggregation).toHaveBeenCalledWith(env.DB, "sk-test", "2026-06-01");
+    expect(msg.retry).toHaveBeenCalled();
+    expect(msg.ack).not.toHaveBeenCalled();
+  });
+
+  it("enqueues an aggregate message after all daily scrape tasks complete", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+    const env = mockEnvWith(m);
+    const ctx = mockCtx();
+
+    const dailyMsg = makeMsg({
+      id: "2026-06-01_producthunt_top10",
+      scheduled_date: "2026-06-01",
+      website: "producthunt",
+      item: "top10",
+    });
+
+    await queueConsumer(makeBatch([dailyMsg]), env, ctx);
+
+    expect(env.SCRAPE_QUEUE.send).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduled_date: "2026-06-01", type: "aggregate" })
+    );
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("falls back to in-process aggregation when the aggregate message cannot be enqueued", async () => {
+    const s = newStmt();
+    const m = mockD1(s);
+    const queue = mockQueue();
+    vi.mocked(queue.send).mockRejectedValueOnce(new Error("queue down"));
+    const env = mockEnvWith(m, { SCRAPE_QUEUE: queue });
+    const ctx = mockCtx();
+
+    const dailyMsg = makeMsg({
+      id: "2026-06-01_producthunt_top10",
+      scheduled_date: "2026-06-01",
+      website: "producthunt",
+      item: "top10",
+    });
+
+    await queueConsumer(makeBatch([dailyMsg]), env, ctx);
+
+    expect(ctx.waitUntil).toHaveBeenCalled();
+    expect(triggerContainerAggregation).toHaveBeenCalled();
   });
 });
 
@@ -337,11 +412,7 @@ describe("queueConsumer — daily messages", () => {
       item: "top10",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const batch = makeBatch([makeMsg(dailyMsg)]);
     await queueConsumer(batch, env, mockCtx());
@@ -362,11 +433,7 @@ describe("queueConsumer — daily messages", () => {
       item: "daily",
     };
 
-    const env: Env = {
-      DB: m as unknown as D1Database,
-      DEEPSEEK_API_KEY: "sk-test",
-      EMAIL: mockEmail(),
-    };
+    const env = mockEnvWith(m);
 
     const msg = makeMsg(gtMsg);
     const batch = makeBatch([msg]);
