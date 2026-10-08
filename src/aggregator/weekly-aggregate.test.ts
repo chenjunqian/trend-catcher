@@ -41,7 +41,8 @@ vi.mock("@cloudflare/containers", () => ({
 }));
 
 import { generateText } from "ai";
-import { runWeeklyAggregation, WEEKLY_SYSTEM_PROMPT, WEEKLY_MAX_STEPS } from "./weekly-aggregate";
+import { runWeeklyAggregation, ensureCompleteWeeklySummary, WEEKLY_SYSTEM_PROMPT, WEEKLY_MAX_STEPS } from "./weekly-aggregate";
+import { getWeeklySummaryByDate, getDailySummariesForWeek } from "../db/client";
 
 describe("WEEKLY_SYSTEM_PROMPT", () => {
   it("is a non-empty string", () => {
@@ -131,5 +132,73 @@ describe("runWeeklyAggregation", () => {
     const callArgs = (generateText as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(callArgs.prompt).toContain("bilingual");
     expect(callArgs.prompt).toContain("past week");
+  });
+});
+
+describe("ensureCompleteWeeklySummary", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const model = {} as unknown as Parameters<typeof ensureCompleteWeeklySummary>[1];
+  const allFour = {
+    producthunt: { en: "PH", zh: "PH" },
+    hackernews: { en: "HN", zh: "HN" },
+    github: { en: "GH", zh: "GH" },
+    googletrends: { en: "GT", zh: "GT" },
+  };
+
+  it("reports complete when all 4 sites and the report exist", async () => {
+    const status = await ensureCompleteWeeklySummary({} as D1Database, model, "2026-06-01");
+
+    expect(status.complete).toBe(true);
+    expect(status.missingSites).toEqual([]);
+    expect(status.missingReport).toBe(false);
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("reports the specific missing site", async () => {
+    const { googletrends: _omitted, ...threeSites } = allFour;
+    vi.mocked(getWeeklySummaryByDate).mockResolvedValue({
+      site_summaries: JSON.stringify(threeSites),
+      full_report_en: "report en",
+      full_report_zh: "report zh",
+    } as never);
+
+    const status = await ensureCompleteWeeklySummary({} as D1Database, model, "2026-06-01");
+
+    expect(status.complete).toBe(false);
+    expect(status.missingSites).toEqual(["googletrends"]);
+    expect(status.missingReport).toBe(false);
+    expect(getDailySummariesForWeek).toHaveBeenCalled();
+  });
+
+  it("reports a missing final report", async () => {
+    vi.mocked(getWeeklySummaryByDate).mockResolvedValue({
+      site_summaries: JSON.stringify(allFour),
+      full_report_en: "",
+      full_report_zh: "",
+    } as never);
+
+    const status = await ensureCompleteWeeklySummary({} as D1Database, model, "2026-06-01");
+
+    expect(status.complete).toBe(false);
+    expect(status.missingSites).toEqual([]);
+    expect(status.missingReport).toBe(true);
+  });
+
+  it("reports all sites missing when no weekly summary row exists", async () => {
+    vi.mocked(getWeeklySummaryByDate).mockResolvedValue(null);
+
+    const status = await ensureCompleteWeeklySummary({} as D1Database, model, "2026-06-01");
+
+    expect(status.complete).toBe(false);
+    expect(status.missingSites).toEqual([
+      "producthunt",
+      "hackernews",
+      "github",
+      "googletrends",
+    ]);
+    expect(status.missingReport).toBe(true);
   });
 });

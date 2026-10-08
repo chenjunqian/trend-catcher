@@ -79,15 +79,24 @@ api.post("/internal/aggregate", async (c) => {
   const date = getTodayDateString();
   const queue = SCRAPE_QUEUE as unknown as Queue<TaskMessage>;
 
+  let body: { date?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  const requestedDate = body.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : date;
+
   await queue.send({
-    id: `manual_${date}_daily`,
-    scheduled_date: date,
+    id: `manual_${requestedDate}_daily`,
+    scheduled_date: requestedDate,
     website: "daily",
     item: "aggregate",
     type: "manual-daily",
   });
 
-  return c.json({ ok: true, message: "Daily aggregation triggered" });
+  return c.json({ ok: true, message: `Daily aggregation triggered for ${requestedDate}` });
 });
 
 api.post("/internal/weekly-aggregate", async (c) => {
