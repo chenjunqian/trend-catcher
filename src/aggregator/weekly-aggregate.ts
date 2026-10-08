@@ -34,7 +34,10 @@ Your tools and workflow:
 Report requirements:
 - Synthesize across the full week, highlighting what persisted vs what was a one-day blip
 - Identify products that appeared on multiple platforms (e.g., launched on PH, trended on GitHub, and spiked in Google search)
-- Focus on actionable insights for indie developers
+- Focus on actionable insights for indie developers, concrete user pain points, and commercial opportunities
+- Break the developer echo chamber: connect technical launches with non-technical vertical industries and small business workflows (Google Trends / Search Demand) where customer willingness to pay is high
+- Strict noise filtering: NEVER include pure sports scores, schedules, player injuries (e.g. NFL, MLB, NBA, NHL), celebrity gossip, or ephemeral sensationalist news. Only analyze topics with clear technology, software, product, or commercial business relevance
+- Demand-side reverse-engineering: treat Google Trends and search queries as user pain points, unfulfilled software needs, or desires for alternatives. Connect them to builders' opportunities
 - Each site summary MUST list up to 10 products/topics with [Category] tags and Markdown links
 - Use the webSearch and googleSuggest tools to enrich your analysis with real-world context
 
