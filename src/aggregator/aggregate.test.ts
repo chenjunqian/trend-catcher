@@ -132,6 +132,10 @@ describe("runAggregation", () => {
     expect(callArgs.system).toContain("sports");
     expect(callArgs.system).toContain("pain points");
     expect(callArgs.system).toContain("non-technical");
+    expect(callArgs.system).toContain("SEO");
+    expect(callArgs.system).toContain("Alternative Demand");
+    expect(callArgs.system).toContain("Workflow Automation");
+    expect(callArgs.system).toContain("dynamic");
   });
 
   it("uses prompt instructing bilingual output", async () => {

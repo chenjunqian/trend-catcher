@@ -22,15 +22,10 @@ vi.mock("../notifier/email", () => ({
   sendWeeklyEmail: vi.fn(),
 }));
 
-vi.mock("./processors/googletrends", () => ({
-  fetchGoogleTrends: vi.fn().mockResolvedValue([{ title: "test query", approxTraffic: "10K+", link: "https://trends.google.com", pubDate: "2026-06-01", newsItems: [] }]),
-}));
-
 import { triggerContainerAggregation, triggerWeeklyContainerAggregation } from "../aggregator/container";
 import { runAggregation } from "../aggregator/aggregate";
 import { runWeeklyAggregation } from "../aggregator/weekly-aggregate";
 import { sendDailyEmail, sendWeeklyEmail } from "../notifier/email";
-import { fetchGoogleTrends } from "./processors/googletrends";
 
 function makeMsg(body: TaskMessage) {
   return {

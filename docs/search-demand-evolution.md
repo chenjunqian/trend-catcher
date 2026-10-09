@@ -106,3 +106,41 @@ During the 3–7 days following deployment, monitor the following evaluation cri
 * **Daily Aggregator System Prompt**: [src/aggregator/aggregate.ts](file:///home/chenjunqian/Develop/trend-catcher/src/aggregator/aggregate.ts)
 * **Weekly Aggregator System Prompt**: [src/aggregator/weekly-aggregate.ts](file:///home/chenjunqian/Develop/trend-catcher/src/aggregator/weekly-aggregate.ts)
 * **Autocomplete Probe Tool**: [src/aggregator/tools.ts](file:///home/chenjunqian/Develop/trend-catcher/src/aggregator/tools.ts)
+
+---
+
+## 6. Evolution to Fully Autonomous AI-Driven SEO Seeds (October 2026)
+
+### 6.1 Problem with Layer 1 Static Seeds
+While the initial 15 seeds eliminated sports score noise, operational observation revealed a new limitation: **repetitive echo chamber**.
+- The Google Trends card on the dashboard repeated `contractors`, `photographers`, and `property managers` every single day because `DEFAULT_SEARCH_SEEDS` was fixed and `saveSiteSummary("googletrends")` had been instructed to only format items from raw data.
+- The daily reports lacked fresh cross-industry exploration matched to each day's unique technical launches (e.g. on-device voice models, AI agent security scanners, ICANN private TLDs).
+
+### 6.2 The New Solution: Senior SEO & Commercial Intent Specialist
+The architecture evolved from a static seed foundation to **autonomous dynamic SEO discovery**:
+
+1. **Role Redefinition in Prompts**:
+   The agent in `src/aggregator/aggregate.ts` and `src/aggregator/weekly-aggregate.ts` is positioned as a **Senior Commercial SEO & Market Research Specialist**.
+   - Instead of reading static seeds, the agent inspects today's supply-side technology breakthroughs from Product Hunt, Hacker News, and GitHub.
+   - It formulates 4–8 dynamic commercial search seeds across 4 key intent dimensions:
+     - `[Alternative Demand]`: `alternative to [expensive/monopoly legacy tool] for [small business/solo]`
+     - `[Workflow Automation]`: `[profession] [repetitive manual task] software/tool/template`
+     - `[Solo/SMB Micro-SaaS]`: `simple crm for [niche]`, `booking system for [industry]`
+     - `[Applied AI Intent]`: `ai [capability] for [traditional non-tech role]`
+
+2. **Tool Upgrade (Batch Concurrent Probing)**:
+   - `googleSuggest` in `src/aggregator/tools.ts` was upgraded to support `queries: string[]`.
+   - The agent sends its batch of 4–8 dynamic seeds in a single tool call, which executes concurrently via `Promise.all` against Google Autocomplete, returning verified user search completions with explore/search URLs without burning valuable agent step loops.
+
+3. **Decoupled Google Trends Summary Card**:
+   - `saveSiteSummary("googletrends")` is explicitly decoupled from the scraper's raw seed data. It is directly populated with the verified high-intent long-tail keywords discovered through the dynamic SEO probe.
+   - The scraper's `DEFAULT_SEARCH_SEEDS` is relegated to a lightweight cold-start / offline fallback.
+
+4. **DeepSeek Prefix Cache Integrity**:
+   - The system prompt remains 100% static (no dates or dynamic templating injected into system prompt text). Dynamic seeds are formulated by the model during the reasoning trace and executed via tool calls, ensuring optimal prompt cache hit rates on DeepSeek.
+
+### 6.3 Architectural Decoupling: Moving Google Trends from Queue Scraping into Aggregator
+To eliminate the root cause of the "anchoring trap", Google Trends was removed from the pre-scraping cron queue:
+- **Scrape Queue (`generator.ts` & `consumer.ts`)**: Now solely responsible for the 3 objective technical supply sources (`producthunt`, `hackernews`, `github`). No fixed seeds are queried at 0:00, avoiding empty or biased `raw_data` in `scrape_tasks`.
+- **Aggregator as Autonomous Engine**: Because all 3 supply sources are completed before aggregation begins, the AI in the Aggregator has full visibility into today's tech innovations. It formulates search seeds reactively, queries Google Autocomplete via `googleSuggest`, and synthesizes the `googletrends` card directly.
+- **Result**: 100% dynamic demand generation, reduced queue messages, faster crawl-to-aggregate latency, and zero hardcoded profession bias.

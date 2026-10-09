@@ -23,23 +23,63 @@ export interface SiteSummaryEntry {
 function createGoogleSuggestTool(logPrefix: string) {
   return tool({
     description:
-      "Get real-time Google search autocomplete suggestions for a given keyword, product name, or topic. Use this to discover search intent, user questions, rising long-tail keywords, and market demand.",
+      "Get real-time Google search autocomplete suggestions for one or more keywords / seeds. Use this as a senior SEO specialist to probe search intent, user questions, rising long-tail keywords, and market demand.",
     parameters: z.object({
+      queries: z
+        .array(z.string().min(1).max(200))
+        .min(1)
+        .max(10)
+        .optional()
+        .describe(
+          "List of search queries / seeds to probe concurrently (up to 10). Recommended for batch SEO demand discovery."
+        ),
       query: z
         .string()
         .min(1)
         .max(200)
-        .describe("The keyword or phrase to get Google search suggestions for."),
+        .optional()
+        .describe("Single keyword or phrase to probe. Backward compatible with single-query probe."),
       lang: z.string().optional().describe("Language code, e.g. 'en' or 'zh'. Defaults to 'en'."),
       geo: z.string().optional().describe("Country code, e.g. 'us'. Defaults to 'us'."),
     }),
-    execute: async ({ query, lang = "en", geo = "us" }) => {
-      console.log(`${logPrefix} googleSuggest: "${query}" (${lang}/${geo})`);
-      const suggestions = await fetchGoogleAutocomplete(query, lang, geo);
+    execute: async ({ queries, query, lang = "en", geo = "us" }) => {
+      const targetQueries = queries && queries.length > 0 ? queries : query ? [query] : [];
+      if (targetQueries.length === 0) {
+        return {
+          query: "",
+          suggestions: [],
+          totalSuggestions: 0,
+          results: [],
+          totalQueries: 0,
+        };
+      }
+
+      console.log(
+        `${logPrefix} googleSuggest: probing ${targetQueries.length} query/queries (${lang}/${geo}): ${targetQueries
+          .join(", ")
+          .slice(0, 100)}`
+      );
+
+      const results = await Promise.all(
+        targetQueries.map(async (q) => {
+          const suggestions = await fetchGoogleAutocomplete(q, lang, geo);
+          return {
+            query: q,
+            suggestions,
+            totalSuggestions: suggestions.length,
+            exploreUrl: `https://trends.google.com/trends/explore?q=${encodeURIComponent(q).replace(/%20/g, "+")}&geo=${encodeURIComponent(geo.toUpperCase())}`,
+            searchUrl: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+          };
+        })
+      );
+
+      const first = results[0];
       return {
-        query,
-        suggestions,
-        totalSuggestions: suggestions.length,
+        query: first.query,
+        suggestions: first.suggestions,
+        totalSuggestions: first.totalSuggestions,
+        results,
+        totalQueries: results.length,
       };
     },
   });
