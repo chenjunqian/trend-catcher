@@ -6,13 +6,11 @@ import "./proxy";
 import { fetchProductHuntTop20 } from "../src/tasks/processors/producthunt";
 import { fetchHackerNewsTop30 } from "../src/tasks/processors/hackernews";
 import { fetchGitHubTrending } from "../src/tasks/processors/github";
-import { fetchGoogleTrends } from "../src/tasks/processors/googletrends";
 import { getTodayDateString, getLastWeekMonday, getDateRangeForWeek } from "../src/utils/date";
 
 const TASK_ID_PH = "producthunt_top10";
 const TASK_ID_HN = "hackernews_top30";
 const TASK_ID_GH = "github_trending";
-const TASK_ID_GT = "googletrends_daily";
 const D1_DB = "trend-catcher-db";
 const NOW = Math.floor(Date.now() / 1000);
 const DATE = getTodayDateString();
@@ -103,14 +101,6 @@ async function main() {
     console.log(`  [GH]  ❌ ${(err as Error).message}`);
   }
 
-  try {
-    console.log("  [GT]  Google Trends...");
-    gt = await fetchGoogleTrends("US");
-    console.log(`  [GT]  ✅ ${(gt as unknown[]).length} items`);
-  } catch (err) {
-    console.log(`  [GT]  ❌ ${(err as Error).message}`);
-  }
-
   console.log("");
 
   // ── Phase 2: Reset + Insert into D1 ────────────
@@ -127,11 +117,8 @@ async function main() {
   if (Array.isArray(gh) && gh.length > 0) {
     insertTask(TASK_ID_GH, "github", "trending", JSON.stringify(gh));
   }
-  if (Array.isArray(gt) && gt.length > 0) {
-    insertTask(TASK_ID_GT, "googletrends", "daily", JSON.stringify(gt));
-  }
 
-  const taskCount = [ph, hn, gh, gt].filter(
+  const taskCount = [ph, hn, gh].filter(
     (a) => Array.isArray(a) && (a as unknown[]).length > 0
   ).length;
   console.log(`  ✅ ${taskCount} tasks written to D1\n`);

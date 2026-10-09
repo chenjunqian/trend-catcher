@@ -135,6 +135,40 @@ describe("createAgentTools", () => {
       expect(result.suggestions).toEqual(["cursor ai", "cursor alternative"]);
       expect(result.totalSuggestions).toBe(2);
     });
+
+    it("supports batch probing with multiple queries", async () => {
+      globalThis.fetch = vi.fn((url: string | URL | Request) => {
+        const urlStr = url.toString();
+        if (urlStr.includes("clio")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify(["alternative to clio", ["alternative to clio for solo", "alternative to clio free"]]),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            )
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(["software for roofers", ["software for roofers free", "software for roofers takeoff"]]),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }) as typeof globalThis.fetch;
+
+      const m = mockD1();
+      const db = m as unknown as D1Database;
+      const tools = createAgentTools(db, date);
+      const result = await tools.googleSuggest.execute(
+        { queries: ["alternative to clio", "software for roofers"] },
+        execOpts
+      );
+      expect(result.totalQueries).toBe(2);
+      expect(result.results).toHaveLength(2);
+      expect(result.results[0].query).toBe("alternative to clio");
+      expect(result.results[0].suggestions).toEqual(["alternative to clio for solo", "alternative to clio free"]);
+      expect(result.results[0].exploreUrl).toContain("trends.google.com");
+      expect(result.results[1].query).toBe("software for roofers");
+    });
   });
 
   describe("webSearch", () => {

@@ -157,6 +157,22 @@ describe("createInMemoryWeeklyAgentTools", () => {
       expect(result.query).toBe("niche idea");
       expect(result.suggestions).toHaveLength(2);
     });
+
+    it("supports batch queries in weekly tools", async () => {
+      globalThis.fetch = vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(["test", ["test 1", "test 2"]]),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        )
+      ) as typeof globalThis.fetch;
+
+      const { tools } = createInMemoryWeeklyAgentTools(weekStartDate, []);
+      const result = await tools.googleSuggest.execute({ queries: ["seed 1", "seed 2"] }, execOpts);
+      expect(result.totalQueries).toBe(2);
+      expect(result.results).toHaveLength(2);
+    });
   });
 
   describe("getResults", () => {
